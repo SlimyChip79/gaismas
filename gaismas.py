@@ -3,6 +3,7 @@ import time
 import board
 import busio
 from adafruit_pcf8575 import PCF8575
+from digitalio import Direction
 
 # Initialize I2C
 i2c = busio.I2C(board.SCL, board.SDA)
@@ -15,8 +16,8 @@ pins = [pcf.get_pin(i) for i in range(16)]
 
 # Set all pins as outputs and initialize HIGH (OFF if using active LOW relays)
 for pin in pins:
-    pin.direction = True  # True = output
-    pin.value = True      # HIGH = OFF
+    pin.direction = Direction.OUTPUT
+    pin.value = True
 
 print("Starting sequence...")
 
