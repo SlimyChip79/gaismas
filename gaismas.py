@@ -4,30 +4,33 @@ import board
 import busio
 from adafruit_pcf8575 import PCF8575
 
-# Initialize I2C
+# I2C setup
 i2c = busio.I2C(board.SCL, board.SDA)
 
-# PCF8575 address from i2cdetect
+# PCF8575 address (replace 0x27 with your detected address)
 pcf = PCF8575(i2c, 0x27)
 
-# Set all 16 pins as outputs
-for pin in range(16):
-    pcf.setup(pin, True)  # True = output
+# Number of relays
+NUM_RELAYS = 16
 
-print("Starting 16-relay test (active-low)...")
+# Initialize all pins as outputs and off
+for pin in range(NUM_RELAYS):
+    pcf[pin] = False
 
+print("All relays initialized to OFF.")
+
+# Main loop
 try:
     while True:
-        for pin in range(16):
+        # Turn on each relay one by one
+        for pin in range(NUM_RELAYS):
+            pcf[pin] = True
             print(f"Relay {pin} ON")
-            pcf.output(pin, False)  # Active LOW = ON
-            time.sleep(0.5)
+            time.sleep(0.5)  # half-second delay
+            pcf[pin] = False
             print(f"Relay {pin} OFF")
-            pcf.output(pin, True)   # OFF
-        time.sleep(1)  # pause between cycles
-
+            time.sleep(0.2)
 except KeyboardInterrupt:
-    # Turn all relays OFF on exit
-    for pin in range(16):
-        pcf.output(pin, True)
-    print("Relay test stopped, all relays OFF")
+    print("Exiting, turning all relays OFF.")
+    for pin in range(NUM_RELAYS):
+        pcf[pin] = False
