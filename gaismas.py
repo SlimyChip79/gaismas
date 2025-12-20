@@ -1,23 +1,28 @@
+#!/usr/bin/env python3
+import time
 import board
 import busio
-import adafruit_pcf8575
-import time
+from adafruit_pcf8575 import PCF8575
 
-# I2C setup
+# Initialize I2C and PCF8575 at detected address 0x27
 i2c = busio.I2C(board.SCL, board.SDA)
+pcf = PCF8575(i2c, 0x27)
 
-# PCF8575 at address 0x27
-pcf = adafruit_pcf8575.PCF8575(i2c, 0x27)
-
-# Initialize all pins as outputs if needed (PCF8575 defaults to input)
+# Configure all 16 pins as outputs
 for pin in range(16):
-    # some libraries don't require setup; just write directly
-    pcf.output(pin, False)  # set LOW
+    pcf.pin_mode(pin, True)  # True = output
 
-# Toggle pins
+print("Starting sequence...")
+
 while True:
+    # Turn pins ON one by one
     for pin in range(16):
-        pcf.output(pin, True)  # HIGH
+        pcf[pin] = True
+        print(f"Pin {pin} ON")
         time.sleep(0.5)
-        pcf.output(pin, False)  # LOW
+
+    # Turn pins OFF one by one
+    for pin in range(16):
+        pcf[pin] = False
+        print(f"Pin {pin} OFF")
         time.sleep(0.5)
