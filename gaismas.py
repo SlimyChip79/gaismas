@@ -7,69 +7,67 @@ from adafruit_mcp230xx.digital_inout import DigitalInOut
 
 # -------------------- I2C SETUP --------------------
 i2c = busio.I2C(board.SCL, board.SDA)
-time.sleep(1)
+time.sleep(1)  # small delay for bus stability
 
-# -------------------- INPUT BOARDS --------------------
+# MCP23017 input boards
 mcp1 = mcp23017.MCP23017(i2c, address=0x20)
 mcp2 = mcp23017.MCP23017(i2c, address=0x21)
 
-inputs = []
-
-# MCP1 pins 0-15
-for pin in range(16):
-    p = DigitalInOut(mcp1.get_pin(pin))
-    p.switch_to_input()
-    inputs.append(p)
-
-# MCP2 pins 0-15
-for pin in range(16):
-    p = DigitalInOut(mcp2.get_pin(pin))
-    p.switch_to_input()
-    inputs.append(p)
-
-# -------------------- RELAY BOARDS --------------------
+# PCF8575 relay boards
 pcf1 = PCF8575(i2c, address=0x26)
 pcf2 = PCF8575(i2c, address=0x27)
 
-# -------------------- RELAY STATES --------------------
-relay_states = [False]*32  # all OFF
-out1 = 0xFFFF  # HIGH = OFF
-out2 = 0xFFFF
-pcf1.write_gpio(out1)
-pcf2.write_gpio(out2)
+# -------------------- CONFIG --------------------
+DEBOUNCE_DELAY = 50  # ms
 
-# -------------------- BUTTON STATE TRACKING --------------------
-# initialize last_values to LOW (not pressed)
-last_values = [False]*32
+# -------------------- INPUTS --------------------
+inputs1_pins = list(range(16))  # MCP1 pins 0-15
+inputs2_pins = list(range(16))  # MCP2 pins 0-15
 
-print("32-input pushbutton controller started, all relays OFF at start")
+inputs1 = [mcp1.get_pin(pin) for pin in inputs1_pins]
+inputs2 = [mcp2.get_pin(pin) for pin in inputs2_pins]
 
-# -------------------- MAIN LOOP --------------------
+for p in inputs1 + inputs2:
+    p.switch_to_input()
+
+all_inputs = inputs1 + inputs2
+last_values = [0]*32
+states = [False]*32  # store toggle states
+
+# -------------------- INITIAL RELAYS --------------------
+pcf1.write_gpio(0xFFFF)  # all relays off (active-low)
+pcf2.write_gpio(0xFFFF)
+time.sleep(0.2)
+
+print("32 pushbutton controller started")
+
+# -------------------- LOOP --------------------
 while True:
-    for i, inp in enumerate(inputs):
-        current_val = inp.value  # True = HIGH (pressed), False = LOW
+    out1 = 0xFFFF  # PCF8575 board 1 outputs
+    out2 = 0xFFFF  # PCF8575 board 2 outputs
+    current_time = int(time.time() * 1000)  # ms
 
-        # Detect **press** (LOW -> HIGH)
-        if current_val == True and last_values[i] == False:
-            relay_states[i] = not relay_states[i]
+    for i, pin_obj in enumerate(all_inputs):
+        val = pin_obj.value
+        if val and not last_values[i]:  # rising edge
+            states[i] = not states[i]   # toggle state
+        last_values[i] = val
 
-        last_values[i] = current_val
-
-        # Update outputs
-        if i < 16:
-            if relay_states[i]:
-                out1 &= ~(1 << i)  # LOW = ON
+        # Assign relay output
+        relay_pin = i  # 0-31
+        if states[i]:
+            if relay_pin < 16:
+                out1 &= ~(1 << relay_pin)
             else:
-                out1 |= (1 << i)   # HIGH = OFF
-        else:
-            idx = i - 16
-            if relay_states[i]:
-                out2 &= ~(1 << idx)
-            else:
-                out2 |= (1 << idx)
+                out2 &= ~(1 << (relay_pin - 16))
 
-    # Write outputs
+    # Write to relays
     pcf1.write_gpio(out1)
     pcf2.write_gpio(out2)
+
+    # Debug
+    print("\nInputs:", [p.value for p in all_inputs])
+    print("Relays out1: {:016b}".format(out1))
+    print("Relays out2: {:016b}".format(out2))
 
     time.sleep(0.05)
