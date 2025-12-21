@@ -10,7 +10,7 @@ time.sleep(1)  # give bus time to stabilize
 
 # -------------------- MCP23017 BOARD --------------------
 try:
-    mcp2 = mcp23017.MCP23017(i2c, address=0x21)
+    mcp2 = mcp23017.MCP23017(i2c, address=0x22)
     time.sleep(0.2)
 except OSError as e:
     print("Error initializing MCP23017 at 0x21:", e)
