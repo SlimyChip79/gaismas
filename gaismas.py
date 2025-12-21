@@ -3,7 +3,6 @@ import board
 import busio
 from adafruit_mcp230xx import mcp23017
 from adafruit_pcf8575 import PCF8575
-from adafruit_mcp230xx.digital_inout import DigitalInOut
 
 # -------------------- I2C SETUP --------------------
 i2c = busio.I2C(board.SCL, board.SDA)
@@ -19,14 +18,17 @@ pcf2 = PCF8575(i2c, address=0x27)
 
 # -------------------- INPUT SETUP --------------------
 inputs = []
+
+# MCP1 pins 0–15
 for pin in range(16):
-    p = DigitalInOut(mcp1.get_pin(pin))
-    p.switch_to_input()
+    p = mcp1.get_pin(pin)
+    p.switch_to_input(pull=None)  # use default, can also use p.switch_to_input(pull=pull.UP)
     inputs.append(p)
 
+# MCP2 pins 0–15
 for pin in range(16):
-    p = DigitalInOut(mcp2.get_pin(pin))
-    p.switch_to_input()
+    p = mcp2.get_pin(pin)
+    p.switch_to_input(pull=None)
     inputs.append(p)
 
 # -------------------- RELAY STATE --------------------
@@ -37,7 +39,7 @@ pcf1.write_gpio(out1)
 pcf2.write_gpio(out2)
 
 # -------------------- BUTTON STATE TRACKING --------------------
-last_values = [1]*32  # initialize to HIGH (not pressed)
+last_values = [1]*32  # initialize to HIGH (released)
 
 print("32-input pushbutton controller started")
 
@@ -46,8 +48,8 @@ while True:
     for i, inp in enumerate(inputs):
         currentState = inp.value  # LOW=pressed, HIGH=released
 
-        # Arduino-style edge detection: LOW->HIGH toggle
-        if currentState == 0 and last_values[i] == 1:  # pressed (LOW)
+        # Arduino-style edge detection: LOW -> HIGH transition
+        if currentState == 0 and last_values[i] == 1:
             relay_states[i] = not relay_states[i]
 
         last_values[i] = currentState
