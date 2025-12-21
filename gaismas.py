@@ -37,18 +37,20 @@ pcf1.write_gpio(out1)
 pcf2.write_gpio(out2)
 
 # -------------------- BUTTON STATE TRACKING --------------------
-last_values = [0]*32
+last_values = [1]*32  # initialize to HIGH (not pressed)
 
 print("32-input pushbutton controller started")
 
 # -------------------- MAIN LOOP --------------------
 while True:
     for i, inp in enumerate(inputs):
-        val = inp.value
-        if val and not last_values[i]:  # rising edge
+        currentState = inp.value  # LOW=pressed, HIGH=released
+
+        # Arduino-style edge detection: LOW->HIGH toggle
+        if currentState == 0 and last_values[i] == 1:  # pressed (LOW)
             relay_states[i] = not relay_states[i]
 
-        last_values[i] = val
+        last_values[i] = currentState
 
         # update outputs
         if i < 16:
@@ -66,9 +68,5 @@ while True:
     # write outputs
     pcf1.write_gpio(out1)
     pcf2.write_gpio(out2)
-
-    # optional debug
-    # print([inp.value for inp in inputs])
-    # print([int(r) for r in relay_states])
 
     time.sleep(0.05)
