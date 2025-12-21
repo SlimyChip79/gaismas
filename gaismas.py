@@ -5,52 +5,59 @@ from adafruit_mcp230xx.mcp23017 import MCP23017
 from adafruit_mcp230xx.digital_inout import DigitalInOut
 from adafruit_pcf8575 import PCF8575
 
-# -------------------- I2C --------------------
+# -------------------- I2C SETUP --------------------
 i2c = busio.I2C(board.SCL, board.SDA)
-time.sleep(1)
+time.sleep(1)  # allow bus to stabilize
 
-# -------------------- BOARDS --------------------
-mcp_inputs = MCP23017(i2c, address=0x20)  # 16 inputs
-pcf_relays = PCF8575(i2c, address=0x26)   # 16 relays
+# MCP23017 boards (2 chips)
+mcp1 = MCP23017(i2c, address=0x20)
+mcp2 = MCP23017(i2c, address=0x21)
 
-# -------------------- CONFIG --------------------
-DEBOUNCE_DELAY = 50  # ms
+# PCF8575 relay boards (2 boards)
+pcf1 = PCF8575(i2c, address=0x26)
+pcf2 = PCF8575(i2c, address=0x27)
 
-# Map inputs to relays directly
-inputs_map = [(mcp_inputs, i) for i in range(16)]
-relays_map = list(range(16))
+# -------------------- INPUTS --------------------
+# Map all 32 inputs to MCP pins
+inputs = [DigitalInOut(mcp1, i) for i in range(16)] + [DigitalInOut(mcp2, i) for i in range(16)]
+for inp in inputs:
+    inp.switch_to_input()  # pulled-down by default
 
-# -------------------- INIT --------------------
-inputs = [DigitalInOut(chip, pin) for chip, pin in inputs_map]
-for p in inputs: p.switch_to_input()
-
-# Safety: all relays OFF (active-low)
-pcf_relays.write_gpio(0xFFFF)
+# -------------------- INITIAL RELAY STATE --------------------
+pcf1.write_gpio(0xFFFF)
+pcf2.write_gpio(0xFFFF)
 time.sleep(0.2)
 
-# States
-last_values = [0]*len(inputs)
-toggle_states = [False]*len(inputs)
+# -------------------- STATE --------------------
+last_values = [0]*32
+toggle_states = [False]*32
 
-print("Simple toggle controller started")
+print("32-button simple toggle controller started")
 
 # -------------------- LOOP --------------------
 while True:
-    out = 0xFFFF  # all relays OFF
-    for i, pin_obj in enumerate(inputs):
-        val = pin_obj.value
+    out1 = 0xFFFF
+    out2 = 0xFFFF
+
+    for i, inp in enumerate(inputs):
+        val = inp.value
         if val and not last_values[i]:
             toggle_states[i] = not toggle_states[i]
         last_values[i] = val
 
         if toggle_states[i]:
-            out &= ~(1 << relays_map[i])
+            if i < 16:
+                out1 &= ~(1 << i)
+            else:
+                out2 &= ~(1 << (i - 16))
 
     # Write relays
-    pcf_relays.write_gpio(out)
+    pcf1.write_gpio(out1)
+    pcf2.write_gpio(out2)
 
-    # Debug
-    print("Inputs:", [p.value for p in inputs])
-    print("Relays: {:016b}".format(out))
+    # Debug prints
+    print("Inputs:", [inp.value for inp in inputs])
+    print("Relays out1: {:016b}".format(out1))
+    print("Relays out2: {:016b}".format(out2))
 
     time.sleep(0.05)
