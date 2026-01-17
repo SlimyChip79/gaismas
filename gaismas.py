@@ -1,36 +1,68 @@
+import smbus
+import RPi.GPIO as GPIO
 import time
-import board
-import busio
-from adafruit_mcp230xx import mcp23017
-from adafruit_mcp230xx.digital_inout import DigitalInOut
+import sys
 
-# -------------------- I2C SETUP --------------------
-i2c = busio.I2C(board.SCL, board.SDA)
-time.sleep(1)  # give bus time to stabilize
+def log(msg):
+    print(f"[GAISMAS][PCA9555] {msg}", flush=True)
 
-# -------------------- MCP23017 BOARD --------------------
+I2C_BUS = 1
+PCA_ADDR = 0x20
+INT_PIN = 17
+
+REG_INPUT_0 = 0x00
+REG_INPUT_1 = 0x01
+REG_OUTPUT_1 = 0x03
+REG_CONFIG_0 = 0x06
+REG_CONFIG_1 = 0x07
+
+log("Starting")
+
 try:
-    mcp2 = mcp23017.MCP23017(i2c, address=0x20)
-    time.sleep(0.2)
-except OSError as e:
-    print("Error initializing MCP23017 at 0x21:", e)
-    raise
+    bus = smbus.SMBus(I2C_BUS)
+except Exception as e:
+    log(f"I2C failed: {e}")
+    sys.exit(1)
 
-# -------------------- INPUT SETUP --------------------
-inputs = []
-for pin in range(16):
-    p = DigitalInOut(mcp2.get_pin(pin))
-    p.switch_to_input()
-    inputs.append(p)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(INT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-print("Reading MCP23017 at 0x21... Press Ctrl+C to stop")
+bus.write_byte_data(PCA_ADDR, REG_CONFIG_0, 0xFF)  # inputs
+bus.write_byte_data(PCA_ADDR, REG_CONFIG_1, 0x00)  # outputs
+bus.write_byte_data(PCA_ADDR, REG_OUTPUT_1, 0x00)
 
-# -------------------- MAIN LOOP --------------------
-while True:
-    try:
-        values = [p.value for p in inputs]
-        print(values)
-    except OSError as e:
-        print("I2C read error:", e)
+log("Configured PCA9555")
 
-    time.sleep(0.1)
+def read_inputs():
+    return (
+        bus.read_byte_data(PCA_ADDR, REG_INPUT_0),
+        bus.read_byte_data(PCA_ADDR, REG_INPUT_1)
+    )
+
+def int_cb(channel):
+    p0, p1 = read_inputs()  # clears interrupt
+    log(f"INT | P0={p0:08b} P1={p1:08b}")
+
+    # example: mirror inputs to outputs
+    bus.write_byte_data(PCA_ADDR, REG_OUTPUT_1, p0)
+
+GPIO.add_event_detect(
+    INT_PIN,
+    GPIO.FALLING,
+    callback=int_cb,
+    bouncetime=50
+)
+
+log("Interrupt armed")
+
+try:
+    while True:
+        time.sleep(5)
+        log("Alive")
+
+except Exception as e:
+    log(f"Main loop error: {e}")
+
+finally:
+    GPIO.cleanup()
+    log("Exit")
