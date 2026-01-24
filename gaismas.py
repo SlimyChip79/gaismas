@@ -17,6 +17,8 @@ REG_OUTPUT_1 = 0x03
 REG_CONFIG_0 = 0x06
 REG_CONFIG_1 = 0x07
 
+POLL_INTERVAL = 0.1  # seconds for GPIO polling fallback
+
 # ================= START =================
 log("Service starting")
 
@@ -34,6 +36,7 @@ except Exception as e:
 
 pca_ready = False
 int_ready = False
+last_pin_state = GPIO.input(INT_PIN)
 
 # ================= PCA SETUP =================
 def pca_setup():
@@ -93,6 +96,13 @@ try:
 
         if not int_ready:
             setup_interrupt()
+
+        # ==== POLLING FALLBACK ====
+        current_state = GPIO.input(INT_PIN)
+        if int_ready is False and current_state != last_pin_state:
+            last_pin_state = current_state
+            if current_state == 0:  # falling edge simulated
+                interrupt_cb(INT_PIN)
 
 except Exception as e:
     log(f"Fatal error: {e}")
