@@ -6,7 +6,7 @@ import sys
 def log(msg):
     print(f"[GAISMAS] {msg}", flush=True)
 
-# ================= CONFIG =================
+# ================= CONFIG ==================
 I2C_BUS = 1
 PCA_ADDR = 0x20
 INT_PIN = 17
