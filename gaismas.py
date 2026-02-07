@@ -10,18 +10,16 @@ DELAY = 0.5      # seconds between toggles
 # ================= HELPER =================
 def write_pcf(value):
     """
-    Write 16-bit value to PCF8575.
-    Each bit controls a relay (0 = ON, 1 = OFF if using active-low relays)
+    Write 16-bit value to PCF8575 safely.
+    Handles high and low bytes correctly.
     """
     try:
-        # PCF8575 expects **low = on**, high = off
-        bus.write_word_data(PCF_ADDR, 0x00, value & 0xFFFF)
+        low = value & 0xFF
+        high = (value >> 8) & 0xFF
+        bus.write_i2c_block_data(PCF_ADDR, low, [high])
     except Exception as e:
         print(f"Failed to write PCF8575: {e}")
 
-def bitmask(i):
-    """Return mask with only i-th bit set (0-indexed)."""
-    return 1 << i
 
 # ================= START =================
 bus = SMBus(I2C_BUS)
