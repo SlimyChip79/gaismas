@@ -2,78 +2,51 @@
 import time
 from smbus2 import SMBus
 
-# ================= CONFIG =================
 I2C_BUS = 1
-PCF_ADDR = 0x27  # Relay extender (PCF8575)
+PCF_ADDR = 0x27  # PCF8575 relay board
 
-# ================= HELPERS =================
-def log(msg):
-    print(f"[GAISMAS] {time.strftime('%H:%M:%S')} | {msg}", flush=True)
-
-def write_relays(bus, relay_bits):
+def write_relays(bus, value):
     """
-    Write 16 relays to PCF8575 using proven working method
-    relay_bits: 16-bit int, bit0 = relay1, bit15 = relay16
+    Write 16-bit value to PCF8575
+    Each bit = one relay (0=on, 1=off for active-low board)
     """
-    # Split low/high bytes
-    low_byte  = relay_bits & 0xFF       # relays 1-8
-    high_byte = (relay_bits >> 8) & 0xFF  # relays 9-16
+    low_byte  = value & 0xFF
+    high_byte = (value >> 8) & 0xFF
 
-    # Invert for active-low relays
+    # Active-low, invert bytes
     low_byte  ^= 0xFF
     high_byte ^= 0xFF
 
-    try:
-        # Write low byte (relays 1-8)
-        bus.write_byte_data(PCF_ADDR, 0x00, low_byte)
-        time.sleep(0.01)
-        # Write high byte (relays 9-16)
-        bus.write_byte_data(PCF_ADDR, 0x01, high_byte)
-        time.sleep(0.01)
-    except OSError as e:
-        log(f"PCF write error: {e}")
+    bus.write_byte_data(PCF_ADDR, 0x00, low_byte)
+    time.sleep(0.01)
+    bus.write_byte_data(PCF_ADDR, 0x01, high_byte)
+    time.sleep(0.01)
 
-# ================= INIT =================
-log("Service starting")
-try:
+def main():
     bus = SMBus(I2C_BUS)
-    log("I2C bus opened")
-except Exception as e:
-    log(f"I2C init failed: {e}")
-    bus = None
+    print("I2C bus opened, starting relay test")
 
-# Clear all relays at startup
-if bus:
+    # Turn all relays off at start
     write_relays(bus, 0x0000)
-    log("PCF8575 relays cleared")
 
-# ================= MAIN LOOP =================
-try:
-    relay_state = 0x0000
-    while True:
-        if not bus:
+    try:
+        while True:
+            for i in range(16):
+                state = 1 << i
+                write_relays(bus, state)
+                print(f"RELAYS: {state:016b}")
+                time.sleep(0.5)
+
+            # Turn all relays off
+            write_relays(bus, 0x0000)
+            print("RELAYS: all off")
             time.sleep(1)
-            continue
 
-        # Example: turn on each relay one by one
-        for i in range(16):
-            relay_state = 1 << i
-            write_relays(bus, relay_state)
-            log(f"RELAYS : {relay_state:016b}")
-            time.sleep(0.5)
-
-        # Turn all off
-        relay_state = 0x0000
-        write_relays(bus, relay_state)
-        log(f"RELAYS : {relay_state:016b}")
-        time.sleep(1)
-
-except KeyboardInterrupt:
-    log("Service stopped by user")
-
-finally:
-    if bus:
-        # Turn off all relays
+    except KeyboardInterrupt:
         write_relays(bus, 0x0000)
+        print("Relay test stopped, all off")
+    finally:
         bus.close()
-    log("Service exited")
+
+if __name__ == "__main__":
+    main()
