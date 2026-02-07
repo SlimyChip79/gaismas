@@ -1,62 +1,81 @@
-import time
 from smbus2 import SMBus
+import time
+from datetime import datetime
 
 # ================= CONFIG =================
-
 I2C_BUS = 1
 
-PCA_ADDR = 0x21   # input expander
-PCF_ADDR = 0x20   # relay expander
+PCA_ADDR = 0x20   # PCA9555 (inputs)
+PCF_ADDR = 0x27   # PCF8575 (relays)
 
-POLL_INTERVAL = 1.0  # seconds
+# PCA9555 registers
+REG_INPUT_0  = 0x00
+REG_INPUT_1  = 0x01
+REG_CONFIG_0 = 0x06
+REG_CONFIG_1 = 0x07
 
-# =========================================
+POLL_INTERVAL = 0.2  # seconds
 
+# ================= LOG =================
+def log(msg):
+    ts = datetime.now().strftime("%H:%M:%S")
+    print(f"[GAISMAS] {ts} | {msg}", flush=True)
+
+# ================= I2C =================
 bus = SMBus(I2C_BUS)
+log("I2C bus opened")
 
-# --- PCA9555 setup: all pins INPUT ---
-bus.write_byte_data(PCA_ADDR, 0x06, 0xFF)  # port 0 config
-bus.write_byte_data(PCA_ADDR, 0x07, 0xFF)  # port 1 config
+# ================= PCA SETUP =================
+try:
+    # Port 0 = inputs (1)
+    # Port 1 = inputs (1)  ← change to 0x00 if you want half outputs
+    bus.write_byte_data(PCA_ADDR, REG_CONFIG_0, 0xFF)
+    bus.write_byte_data(PCA_ADDR, REG_CONFIG_1, 0xFF)
 
-# PCF8575 relay state (1 = OFF, 0 = ON)
-pcf_state = 0xFFFF
+    log("PCA9555 configured (16 inputs)")
+except Exception as e:
+    log(f"PCA9555 init FAILED: {e}")
+    raise SystemExit(1)
 
+# ================= PCF SETUP =================
+try:
+    # All relays OFF
+    bus.write_word_data(PCF_ADDR, 0x00, 0x0000)
+    log("PCF8575 relays cleared")
+except Exception as e:
+    log(f"PCF8575 init FAILED: {e}")
+    raise SystemExit(1)
 
-def read_pca_inputs():
-    low = bus.read_byte_data(PCA_ADDR, 0x00)   # inputs 1–8
-    high = bus.read_byte_data(PCA_ADDR, 0x01)  # inputs 9–16
-    return (high << 8) | low
+# ================= STATE =================
+last_inputs = None
+relay_state = 0x0000
 
-
-def write_pcf(value):
-    bus.write_word_data(PCF_ADDR, 0x00, value)
-
-
-# Initialize relays OFF
-write_pcf(pcf_state)
-
-print("[GAISMAS] Service started")
-print("[GAISMAS] PCA9555 → PCF8575 polling")
-
+# ================= MAIN LOOP =================
 try:
     while True:
-        inputs = read_pca_inputs()
+        # Read PCA inputs
+        p0 = bus.read_byte_data(PCA_ADDR, REG_INPUT_0)
+        p1 = bus.read_byte_data(PCA_ADDR, REG_INPUT_1)
+        inputs = (p1 << 8) | p0   # 16-bit value
 
-        # Direct 1:1 mapping
-        # PCA bit = relay bit
-        # PCA LOW  -> relay ON
-        # PCA HIGH -> relay OFF
-        pcf_state = inputs  # invert if needed below
-        pcf_state ^= 0xFFFF  # because relays are active LOW
+        if inputs != last_inputs:
+            last_inputs = inputs
 
-        write_pcf(pcf_state)
+            # PCA inputs are active-low usually
+            # pressed = 0 → relay ON
+            relay_state = (~inputs) & 0xFFFF
 
-        print(f"[GAISMAS] PCA={inputs:016b}  PCF={pcf_state:016b}")
+            bus.write_word_data(PCF_ADDR, 0x00, relay_state)
+
+            log(f"INPUTS : {inputs:016b}")
+            log(f"RELAYS : {relay_state:016b}")
+
         time.sleep(POLL_INTERVAL)
 
 except KeyboardInterrupt:
-    pass
+    log("Stopping (Ctrl+C)")
+
 finally:
-    write_pcf(0xFFFF)
+    bus.write_word_data(PCF_ADDR, 0x00, 0x0000)
     bus.close()
-    print("[GAISMAS] Stopped")
+    log("All relays OFF, bus closed")
