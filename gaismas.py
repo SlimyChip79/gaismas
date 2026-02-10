@@ -1,36 +1,30 @@
-#!/usr/bin/env python3
-from pcf8575 import PCF8575
 import time
+import board
+import busio
+from adafruit_pcf8574 import PCF8574
 
-# I2C address of your relay board
-PCF_ADDR = 0x27
-I2C_BUS = 1  # Usually 1 on Raspberry Pi
+# I2C bus
+i2c = busio.I2C(board.SCL, board.SDA)
 
-print("[RELAYS] Initializing PCF8575...")
-pcf = PCF8575(I2C_BUS, PCF_ADDR)
-time.sleep(0.2)  # Allow the chip to initialize
+# PCF8574 address
+pcf = PCF8574(i2c, address=0x27)
 
-# Make sure all relays are OFF at start (PCF8575 is active low for most relay boards)
-for pin in range(16):
-    pcf.digital_write(pin, 1)
+# Set all pins as outputs and OFF
+pins = []
+for i in range(8):
+    p = pcf.get_pin(i)
+    p.direction = 1      # OUTPUT
+    p.value = True       # OFF (active-low relay)
+    pins.append(p)
 
-print("[RELAYS] Starting relay test...")
+print("Starting relay test")
 
-try:
-    while True:
-        for pin in range(16):
-            # Turn ON the relay (active low)
-            pcf.digital_write(pin, 0)
-            print(f"Relay {pin+1} ON")
-            time.sleep(0.5)  # keep it on long enough to see LED
+while True:
+    for i in range(8):
+        print(f"Relay {i} ON")
+        pins[i].value = False   # ON
+        time.sleep(1)
 
-            # Turn OFF the relay
-            pcf.digital_write(pin, 1)
-            print(f"Relay {pin+1} OFF")
-            time.sleep(0.2)  # short delay before next relay
-
-except KeyboardInterrupt:
-    print("\n[RELAYS] Test stopped by user, turning all relays OFF...")
-    for pin in range(16):
-        pcf.digital_write(pin, 1)
-    print("[RELAYS] All relays OFF.")
+        print(f"Relay {i} OFF")
+        pins[i].value = True    # OFF
+        time.sleep(0.5)
