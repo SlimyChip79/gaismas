@@ -1,120 +1,89 @@
 #!/usr/bin/env python3
 import time
-import RPi.GPIO as GPIO
-from smbus2 import SMBus
 import board
 import busio
+import RPi.GPIO as GPIO
 from adafruit_pcf8575 import PCF8575
 
-# ---------------- CONFIG ----------------
-I2C_BUS = 1
-
+# ================= CONFIG =================
+# I2C addresses
 PCA1_ADDR = 0x20
 PCA2_ADDR = 0x22
+RELAY1_ADDR = 0x26
+RELAY2_ADDR = 0x27
 
-PCF1_ADDR = 0x26
-PCF2_ADDR = 0x27
-
-REG_INPUT_0  = 0x00
-REG_INPUT_1  = 0x01
-
+# Interrupt pins
 INT1_PIN = 17
 INT2_PIN = 27
 
-POLL_INTERVAL = 0.01  # 10ms fast loop
+POLL_INTERVAL = 0.02  # 20ms
 
-# ---------------- INIT ----------------
+# ================= SETUP =================
 print("[GAISMAS] Initializing...")
 
-bus = SMBus(I2C_BUS)
-
+# I2C
 i2c = busio.I2C(board.SCL, board.SDA)
 time.sleep(1)
 
-pcf1 = PCF8575(i2c, address=PCF1_ADDR)
-pcf2 = PCF8575(i2c, address=PCF2_ADDR)
+# Input extenders
+pca1 = PCF8575(i2c, address=PCA1_ADDR)
+pca2 = PCF8575(i2c, address=PCA2_ADDR)
 
-pcf1_state = 0xFFFF
-pcf2_state = 0xFFFF
+# Relay extenders
+relay1 = PCF8575(i2c, address=RELAY1_ADDR)
+relay2 = PCF8575(i2c, address=RELAY2_ADDR)
 
-pcf1.write_gpio(pcf1_state)
-pcf2.write_gpio(pcf2_state)
+# Turn all relays OFF initially (active-low)
+relay1.write_gpio(0xFFFF)
+relay2.write_gpio(0xFFFF)
 
-GPIO.setwarnings(False)
+# GPIO setup
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(INT1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(INT2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-last_input_1 = [1]*16
-last_input_2 = [1]*16
+# Track last interrupt state
+last_int1 = GPIO.input(INT1_PIN)
+last_int2 = GPIO.input(INT2_PIN)
 
-print("[GAISMAS] Ready (Stable Loop Mode)")
+print("[GAISMAS] Ready (Dual Interrupt Mode)")
 
-# ---------------- HELPERS ----------------
-def read_pca(addr):
-    p0 = bus.read_byte_data(addr, REG_INPUT_0)
-    p1 = bus.read_byte_data(addr, REG_INPUT_1)
-    return [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
-
-def handle_pca1():
-    global pcf1_state
-    inputs = read_pca(PCA1_ADDR)
-
-    for i, val in enumerate(inputs):
-        if val == 0 and last_input_1[i] == 1:
-            mask = 1 << i
-            if pcf1_state & mask:
-                pcf1_state &= ~mask
-                print(f"[26] Relay {i+1} ON")
-            else:
-                pcf1_state |= mask
-                print(f"[26] Relay {i+1} OFF")
-
-            pcf1.write_gpio(pcf1_state)
-
-        last_input_1[i] = val
-
-
-def handle_pca2():
-    global pcf2_state
-    inputs = read_pca(PCA2_ADDR)
-
-    for i, val in enumerate(inputs):
-        if val == 0 and last_input_2[i] == 1:
-            mask = 1 << i
-            if pcf2_state & mask:
-                pcf2_state &= ~mask
-                print(f"[27] Relay {i+1} ON")
-            else:
-                pcf2_state |= mask
-                print(f"[27] Relay {i+1} OFF")
-
-            pcf2.write_gpio(pcf2_state)
-
-        last_input_2[i] = val
-
-
-# ---------------- MAIN LOOP ----------------
+# ================= MAIN LOOP =================
 try:
     while True:
+        # --- PCA1 ---
+        int1_state = GPIO.input(INT1_PIN)
+        if int1_state != last_int1:
+            print(f"INT1 changed: {int1_state}")
+            last_int1 = int1_state
 
-        # Check PCA1 interrupt
-        if GPIO.input(INT1_PIN) == GPIO.LOW:
-            handle_pca1()
-            while GPIO.input(INT1_PIN) == GPIO.LOW:
-                time.sleep(0.001)
+        # Inverted logic: interrupt active HIGH
+        if int1_state == 1:
+            value = pca1.gpio
+            # write input directly to relay1 (active-low)
+            relay1.write_gpio(~value & 0xFFFF)
+            print(f"PCA1 INPUT={bin(value)} RELAY1={bin(~value & 0xFFFF)}")
 
-        # Check PCA2 interrupt
-        if GPIO.input(INT2_PIN) == GPIO.LOW:
-            handle_pca2()
-            while GPIO.input(INT2_PIN) == GPIO.LOW:
-                time.sleep(0.001)
+        # --- PCA2 ---
+        int2_state = GPIO.input(INT2_PIN)
+        if int2_state != last_int2:
+            print(f"INT2 changed: {int2_state}")
+            last_int2 = int2_state
+
+        # Inverted logic: interrupt active HIGH
+        if int2_state == 1:
+            value = pca2.gpio
+            # write input directly to relay2 (active-low)
+            relay2.write_gpio(~value & 0xFFFF)
+            print(f"PCA2 INPUT={bin(value)} RELAY2={bin(~value & 0xFFFF)}")
 
         time.sleep(POLL_INTERVAL)
 
 except KeyboardInterrupt:
-    print("Stopping, turning all relays OFF")
-    pcf1.write_gpio(0xFFFF)
-    pcf2.write_gpio(0xFFFF)
+    print("[GAISMAS] Stopping (KeyboardInterrupt)")
+
+finally:
     GPIO.cleanup()
-    bus.close()
+    relay1.write_gpio(0xFFFF)
+    relay2.write_gpio(0xFFFF)
+    print("[GAISMAS] All relays OFF")
