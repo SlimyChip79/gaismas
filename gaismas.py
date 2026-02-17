@@ -18,8 +18,10 @@ PCF2_ADDR = 0x27
 REG_INPUT_0  = 0x00
 REG_INPUT_1  = 0x01
 
-INT1_PIN = 17   # PCA 0x20
-INT2_PIN = 27   # PCA 0x22
+INT1_PIN = 17
+INT2_PIN = 27
+
+POLL_INTERVAL = 0.01  # 10ms fast loop
 
 # ---------------- INIT ----------------
 print("[GAISMAS] Initializing...")
@@ -40,14 +42,13 @@ pcf2.write_gpio(pcf2_state)
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
-
 GPIO.setup(INT1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(INT2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 last_input_1 = [1]*16
 last_input_2 = [1]*16
 
-print("[GAISMAS] Ready (Dual Interrupt Mode)")
+print("[GAISMAS] Ready (Stable Loop Mode)")
 
 # ---------------- HELPERS ----------------
 def read_pca(addr):
@@ -55,10 +56,8 @@ def read_pca(addr):
     p1 = bus.read_byte_data(addr, REG_INPUT_1)
     return [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
 
-# ---------------- INTERRUPT HANDLERS ----------------
-def handle_pca1(channel):
+def handle_pca1():
     global pcf1_state
-
     inputs = read_pca(PCA1_ADDR)
 
     for i, val in enumerate(inputs):
@@ -76,9 +75,8 @@ def handle_pca1(channel):
         last_input_1[i] = val
 
 
-def handle_pca2(channel):
+def handle_pca2():
     global pcf2_state
-
     inputs = read_pca(PCA2_ADDR)
 
     for i, val in enumerate(inputs):
@@ -96,14 +94,23 @@ def handle_pca2(channel):
         last_input_2[i] = val
 
 
-# Register interrupts (active LOW)
-GPIO.add_event_detect(INT1_PIN, GPIO.FALLING, callback=handle_pca1, bouncetime=50)
-GPIO.add_event_detect(INT2_PIN, GPIO.FALLING, callback=handle_pca2, bouncetime=50)
-
 # ---------------- MAIN LOOP ----------------
 try:
     while True:
-        time.sleep(1)
+
+        # Check PCA1 interrupt
+        if GPIO.input(INT1_PIN) == GPIO.LOW:
+            handle_pca1()
+            while GPIO.input(INT1_PIN) == GPIO.LOW:
+                time.sleep(0.001)
+
+        # Check PCA2 interrupt
+        if GPIO.input(INT2_PIN) == GPIO.LOW:
+            handle_pca2()
+            while GPIO.input(INT2_PIN) == GPIO.LOW:
+                time.sleep(0.001)
+
+        time.sleep(POLL_INTERVAL)
 
 except KeyboardInterrupt:
     print("Stopping, turning all relays OFF")
