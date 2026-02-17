@@ -45,16 +45,22 @@ try:
     while True:
 
         # ----- First extender -----
-        if GPIO.input(INT1_PIN) == GPIO.LOW:  # LOW = interrupt
+        int1_state = GPIO.input(INT1_PIN)
+        print(f"[DEBUG] INT1_PIN = {int1_state}")  # debug print
+        if int1_state == GPIO.LOW:  # LOW = interrupt
             value = inputs1.read()            # read clears interrupt
+            print(f"[DEBUG] PCA1 input value = {bin(value)}")
             relays1.write_gpio(value)         # mirror directly
-            print(f"[PCA1] {bin(value)}")
+            print(f"[PCA1] Relays updated")
 
         # ----- Second extender -----
-        if GPIO.input(INT2_PIN) == GPIO.LOW:
+        int2_state = GPIO.input(INT2_PIN)
+        print(f"[DEBUG] INT2_PIN = {int2_state}")  # debug print
+        if int2_state == GPIO.LOW:
             value = inputs2.read()
+            print(f"[DEBUG] PCA2 input value = {bin(value)}")
             relays2.write_gpio(value)
-            print(f"[PCA2] {bin(value)}")
+            print(f"[PCA2] Relays updated")
 
         time.sleep(POLL_INTERVAL)
 
