@@ -5,64 +5,88 @@ import busio
 import RPi.GPIO as GPIO
 from adafruit_pcf8575 import PCF8575
 
-# ---------------- CONFIG ----------------
-INT1_PIN = 17  # PCA1 interrupt
-INT2_PIN = 27  # PCA2 interrupt
-
-PCF_INPUT1_ADDR = 0x20
-PCF_INPUT2_ADDR = 0x22
-
-PCF_RELAY1_ADDR = 0x26
-PCF_RELAY2_ADDR = 0x27
-
-POLL_INTERVAL = 0.01  # 10 ms
-
-# ---------------- INIT ----------------
 print("[GAISMAS] Initializing...")
 
+# ---------------- I2C ----------------
 i2c = busio.I2C(board.SCL, board.SDA)
 time.sleep(1)
 
-inputs1 = PCF8575(i2c, address=PCF_INPUT1_ADDR)
-inputs2 = PCF8575(i2c, address=PCF_INPUT2_ADDR)
+# ---------------- DEVICES ----------------
+# Inputs
+inputs1 = PCF8575(i2c, address=0x20)
+inputs2 = PCF8575(i2c, address=0x22)
 
-relays1 = PCF8575(i2c, address=PCF_RELAY1_ADDR)
-relays2 = PCF8575(i2c, address=PCF_RELAY2_ADDR)
+# Relays (active LOW)
+relays1 = PCF8575(i2c, address=0x26)
+relays2 = PCF8575(i2c, address=0x27)
 
-# All relays OFF initially (active LOW)
+# All relays OFF initially
 relays1.write_gpio(0xFFFF)
 relays2.write_gpio(0xFFFF)
 
-GPIO.setwarnings(False)
+# ---------------- INTERRUPT PINS ----------------
+INT1_PIN = 17
+INT2_PIN = 27
+
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(INT1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(INT2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-print("[GAISMAS] Ready (Dual LOW-Active Interrupt Mode)")
+# ---------------- PRIMING INPUTS FOR INTERRUPT ----------------
+# Set all pins as INPUT to enable interrupt
+for i in range(16):
+    inputs1.direction[i] = 1
+    inputs2.direction[i] = 1
+
+# Initial read to clear interrupt flags
+_ = inputs1.read()
+_ = inputs2.read()
+
+# ---------------- TRACK LAST STATE ----------------
+last_input_1 = [1]*16
+last_input_2 = [1]*16
+
+print("[GAISMAS] Ready (Polling Interrupt Mode)")
+
+# ---------------- HELPER ----------------
+def handle_inputs(inputs, relays, last_inputs, name):
+    # read all 16 pins
+    vals = inputs.read()
+    for i, val in enumerate(vals):
+        # detect rising or falling edge
+        if val != last_inputs[i]:
+            last_inputs[i] = val
+            if val == 0:  # assuming button pressed is LOW
+                # toggle relay (active LOW)
+                relay_mask = 1 << i
+                current_state = relays.read()
+                if current_state & relay_mask:
+                    relays.write_gpio(current_state & ~relay_mask)  # ON
+                    print(f"[{name}] Relay {i+1} ON")
+                else:
+                    relays.write_gpio(current_state | relay_mask)   # OFF
+                    print(f"[{name}] Relay {i+1} OFF")
+            else:
+                print(f"[{name}] Input {i} released")
 
 # ---------------- MAIN LOOP ----------------
 try:
     while True:
+        # Check first extender
+        if GPIO.input(INT1_PIN) == GPIO.HIGH:  # High = triggered
+            print("[INT1] Triggered")
+            handle_inputs(inputs1, relays1, last_input_1, "PCA1")
+            while GPIO.input(INT1_PIN) == GPIO.HIGH:
+                time.sleep(0.001)
 
-        # ----- First extender -----
-        int1_state = GPIO.input(INT1_PIN)
-        print(f"[DEBUG] INT1_PIN = {int1_state}")  # debug print
-        if int1_state == GPIO.LOW:  # LOW = interrupt
-            value = inputs1.read()            # read clears interrupt
-            print(f"[DEBUG] PCA1 input value = {bin(value)}")
-            relays1.write_gpio(value)         # mirror directly
-            print(f"[PCA1] Relays updated")
+        # Check second extender
+        if GPIO.input(INT2_PIN) == GPIO.HIGH:
+            print("[INT2] Triggered")
+            handle_inputs(inputs2, relays2, last_input_2, "PCA2")
+            while GPIO.input(INT2_PIN) == GPIO.HIGH:
+                time.sleep(0.001)
 
-        # ----- Second extender -----
-        int2_state = GPIO.input(INT2_PIN)
-        print(f"[DEBUG] INT2_PIN = {int2_state}")  # debug print
-        if int2_state == GPIO.LOW:
-            value = inputs2.read()
-            print(f"[DEBUG] PCA2 input value = {bin(value)}")
-            relays2.write_gpio(value)
-            print(f"[PCA2] Relays updated")
-
-        time.sleep(POLL_INTERVAL)
+        time.sleep(0.01)  # main loop
 
 except KeyboardInterrupt:
     print("Stopping, turning all relays OFF")
