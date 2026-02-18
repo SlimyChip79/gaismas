@@ -5,6 +5,7 @@ import board
 import busio
 from adafruit_pcf8575 import PCF8575
 import RPi.GPIO as GPIO
+from datetime import datetime
 
 # ---------------- CONFIG ----------------
 I2C_BUS = 1
@@ -15,103 +16,104 @@ PCA2_ADDR = 0x22
 PCF1_ADDR = 0x26
 PCF2_ADDR = 0x27
 
+INT1_PIN = 17
+INT2_PIN = 27
+
 REG_INPUT_0  = 0x00
 REG_INPUT_1  = 0x01
-REG_CONFIG_0 = 0x06
-REG_CONFIG_1 = 0x07
-REG_OUTPUT_1 = 0x03
-
-INT1_PIN = 17  # PCA1 INT
-INT2_PIN = 27  # PCA2 INT
-
-POLL_INTERVAL = 0.02  # 20ms
 
 # ---------------- INIT ----------------
+def log(msg):
+    ts = datetime.now().strftime("%H:%M:%S")
+    print(f"[GAISMAS] {ts} | {msg}", flush=True)
+
 print("[GAISMAS] Initializing...")
 
-# I2C for PCF8575
+bus = SMBus(I2C_BUS)
+
 i2c = busio.I2C(board.SCL, board.SDA)
 time.sleep(1)
 
+# PCF relays (unchanged)
 pcf1 = PCF8575(i2c, address=PCF1_ADDR)
 pcf2 = PCF8575(i2c, address=PCF2_ADDR)
 
-# I2C for PCA9555
-bus = SMBus(I2C_BUS)
-
-# All relays OFF (active-low)
 pcf1_state = 0xFFFF
 pcf2_state = 0xFFFF
 pcf1.write_gpio(pcf1_state)
 pcf2.write_gpio(pcf2_state)
 
-# ---------------- PCA SETUP ----------------
-def setup_pca(addr):
-    # P0 = inputs (interrupts)
-    bus.write_byte_data(addr, REG_CONFIG_0, 0xFF)  
-    # P1 = outputs
-    bus.write_byte_data(addr, REG_CONFIG_1, 0x00)
-    # Start outputs HIGH (LEDs OFF if active-low)
-    bus.write_byte_data(addr, REG_OUTPUT_1, 0xFF)
+# Track last PCF input state
+last_input_1 = [1]*16
+last_input_2 = [1]*16
 
-
-setup_pca(PCA1_ADDR)
-setup_pca(PCA2_ADDR)
-
-# ---------------- GPIO INT SETUP ----------------
+# ---------------- GPIO for PCA interrupts ----------------
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(INT1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(INT2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-# Track last input state (edge detection)
-last_input_1 = [1]*16
-last_input_2 = [1]*16
+# Track last INT state
+last_int1 = GPIO.input(INT1_PIN)
+last_int2 = GPIO.input(INT2_PIN)
 
-print("[GAISMAS] Ready (Interrupt Mode)")
+log(f"Ready (PCA interrupt mode)")
 
-# ---------------- HELPERS ----------------
+# ---------------- HELPER ----------------
 def read_pca_inputs(addr):
     p0 = bus.read_byte_data(addr, REG_INPUT_0)
     p1 = bus.read_byte_data(addr, REG_INPUT_1)
     return [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
 
-def handle_pca(addr, pcf, pcf_state, last_input, label):
+def handle_pca_interrupt(addr, int_name):
     inputs = read_pca_inputs(addr)
-    for i, val in enumerate(inputs):
-        if val == 0 and last_input[i] == 1:  # falling edge
-            mask = 1 << i
-            if pcf_state & mask:
-                pcf_state &= ~mask
-                print(f"[{label}] Relay {i+1} ON")
-            else:
-                pcf_state |= mask
-                print(f"[{label}] Relay {i+1} OFF")
-
-            pcf.write_gpio(pcf_state)
-        last_input[i] = val
-    return pcf_state
+    log(f"{int_name} INT triggered | Inputs: {''.join(str(b) for b in inputs)}")
+    return inputs
 
 # ---------------- MAIN LOOP ----------------
 try:
     while True:
-        # PCA1 INT
-        if GPIO.input(INT1_PIN) == 0:  # INT active LOW
-            pcf1_state = handle_pca(PCA1_ADDR, pcf1, pcf1_state, last_input_1, 26)
-            while GPIO.input(INT1_PIN) == 0:
-                time.sleep(0.001)
+        # ---------- PCA1 ----------
+        current1 = GPIO.input(INT1_PIN)
+        if current1 != last_int1:
+            last_int1 = current1
+            if current1 == GPIO.LOW:
+                inputs1 = handle_pca_interrupt(PCA1_ADDR, "PCA1")
+                for i, val in enumerate(inputs1):
+                    if val == 0 and last_input_1[i] == 1:
+                        mask = 1 << i
+                        if pcf1_state & mask:
+                            pcf1_state &= ~mask
+                            print(f"[26] Relay {i+1} ON")
+                        else:
+                            pcf1_state |= mask
+                            print(f"[26] Relay {i+1} OFF")
+                        pcf1.write_gpio(pcf1_state)
+                    last_input_1[i] = val
 
-        # PCA2 INT
-        if GPIO.input(INT2_PIN) == 0:  # INT active LOW
-            pcf2_state = handle_pca(PCA2_ADDR, pcf2, pcf2_state, last_input_2, 27)
-            while GPIO.input(INT2_PIN) == 0:
-                time.sleep(0.001)
+        # ---------- PCA2 ----------
+        current2 = GPIO.input(INT2_PIN)
+        if current2 != last_int2:
+            last_int2 = current2
+            if current2 == GPIO.LOW:
+                inputs2 = handle_pca_interrupt(PCA2_ADDR, "PCA2")
+                for i, val in enumerate(inputs2):
+                    if val == 0 and last_input_2[i] == 1:
+                        mask = 1 << i
+                        if pcf2_state & mask:
+                            pcf2_state &= ~mask
+                            print(f"[27] Relay {i+1} ON")
+                        else:
+                            pcf2_state |= mask
+                            print(f"[27] Relay {i+1} OFF")
+                        pcf2.write_gpio(pcf2_state)
+                    last_input_2[i] = val
 
-        time.sleep(POLL_INTERVAL)
+        time.sleep(0.01)  # small sleep for CPU
 
 except KeyboardInterrupt:
     print("Stopping, turning all relays OFF")
     pcf1.write_gpio(0xFFFF)
     pcf2.write_gpio(0xFFFF)
-    GPIO.cleanup()
     bus.close()
+    GPIO.cleanup()
