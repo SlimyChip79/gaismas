@@ -47,11 +47,13 @@ pcf2.write_gpio(pcf2_state)
 
 # ---------------- PCA SETUP ----------------
 def setup_pca(addr):
-    # P0 = inputs (will generate interrupts)
+    # P0 = inputs (interrupts)
+    bus.write_byte_data(addr, REG_CONFIG_0, 0xFF)  
     # P1 = outputs
-    bus.write_byte_data(addr, REG_CONFIG_0, 0xFF)
     bus.write_byte_data(addr, REG_CONFIG_1, 0x00)
-    bus.write_byte_data(addr, REG_OUTPUT_1, 0x00)
+    # Start outputs HIGH (LEDs OFF if active-low)
+    bus.write_byte_data(addr, REG_OUTPUT_1, 0xFF)
+
 
 setup_pca(PCA1_ADDR)
 setup_pca(PCA2_ADDR)
