@@ -89,32 +89,40 @@ def process_simple_buttons(inputs):
             print(f"[SIMPLE] Relay {mask} TOGGLED")
         last_state_simple[idx] = val
 
+# ---------------- PROCESS FUNCTIONS ----------------
 def process_debounce_buttons(inputs):
     now = time.time()
     for idx, (addr, pin, pcf, short_mask, long_mask) in enumerate(debounce_buttons):
-        val = inputs[addr][pin]
+        val = inputs[addr][pin]  # active-low: 0 = pressed
 
-        # debounce edge
+        # Detect edge
         if val != last_state_debounce[idx]:
             debounce_time[idx] = now
 
+        # Check debounce
         if (now - debounce_time[idx]) > DEBOUNCE_DELAY:
-            if val == 0:  # pressed
-                if press_start_time[idx] == 0:
-                    press_start_time[idx] = now
-                    long_press_triggered[idx] = False
-                elif not long_press_triggered[idx] and (now - press_start_time[idx] >= LONG_PRESS_THRESHOLD):
+            # Button pressed
+            if val == 0 and press_start_time[idx] == 0:
+                press_start_time[idx] = now
+                long_press_triggered[idx] = False
+
+            # Button held -> long press
+            elif val == 0 and press_start_time[idx] != 0:
+                if not long_press_triggered[idx] and (now - press_start_time[idx] >= LONG_PRESS_THRESHOLD):
                     toggle_pcf(pcf, long_mask)
                     print(f"[LONG PRESS] Relay {long_mask} TOGGLED")
                     long_press_triggered[idx] = True
-            else:  # released
-                if press_start_time[idx] != 0 and not long_press_triggered[idx]:
+
+            # Button released
+            elif val == 1 and press_start_time[idx] != 0:
+                if not long_press_triggered[idx]:
                     toggle_pcf(pcf, short_mask)
                     print(f"[SHORT PRESS] Relay {short_mask} TOGGLED")
                 press_start_time[idx] = 0
                 long_press_triggered[idx] = False
 
         last_state_debounce[idx] = val
+
 
 # ---------------- MAIN LOOP ----------------
 try:
