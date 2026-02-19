@@ -1,107 +1,103 @@
 #!/usr/bin/env python3
-import smbus2
-import RPi.GPIO as GPIO
 import time
-import signal
-import sys
+from smbus2 import SMBus
+import board
+import busio
+from adafruit_pcf8575 import PCF8575
+import RPi.GPIO as GPIO
 
-# =============================
-# CONFIG
-# =============================
-
+# ---------------- CONFIG ----------------
 I2C_BUS = 1
-PCA_ADDR = 0x20
-INT_PIN = 17   # GPIO where PCA9555 INT is connected
 
-bus = smbus2.SMBus(I2C_BUS)
+PCA1_ADDR = 0x20
+PCA2_ADDR = 0x22
 
-# PCA9555 Registers
-REG_INPUT_0 = 0x00
-REG_INPUT_1 = 0x01
-REG_OUTPUT_0 = 0x02
-REG_OUTPUT_1 = 0x03
-REG_CONFIG_0 = 0x06
-REG_CONFIG_1 = 0x07
+PCF1_ADDR = 0x26
+PCF2_ADDR = 0x27
 
-# =============================
-# SETUP PCA9555
-# =============================
+INT1_PIN = 17  # INT pin for PCA1
+INT2_PIN = 27  # INT pin for PCA2
 
-def pca_write(reg, value):
-    bus.write_byte_data(PCA_ADDR, reg, value)
+REG_INPUT_0  = 0x00
+REG_INPUT_1  = 0x01
 
-def pca_read(reg):
-    return bus.read_byte_data(PCA_ADDR, reg)
+POLL_INTERVAL = 0.001  # 1ms
 
-def setup_pca():
-    # All pins input (change if needed)
-    pca_write(REG_CONFIG_0, 0xFF)
-    pca_write(REG_CONFIG_1, 0xFF)
+# ---------------- INIT ----------------
+print("[GAISMAS] Initializing...")
 
-    # Clear interrupt by reading inputs
-    pca_read(REG_INPUT_0)
-    pca_read(REG_INPUT_1)
+bus = SMBus(I2C_BUS)
 
-    print("PCA9555 configured (all pins input)")
+i2c = busio.I2C(board.SCL, board.SDA)
+time.sleep(1)
 
-# =============================
-# INTERRUPT HANDLER
-# =============================
+pcf1 = PCF8575(i2c, address=PCF1_ADDR)
+pcf2 = PCF8575(i2c, address=PCF2_ADDR)
 
-last_state0 = 0
-last_state1 = 0
+# All relays OFF (active-low)
+pcf1_state = 0xFFFF
+pcf2_state = 0xFFFF
 
-def handle_interrupt(channel):
-    global last_state0, last_state1
+pcf1.write_gpio(pcf1_state)
+pcf2.write_gpio(pcf2_state)
 
-    # FAST read (block read = faster)
-    data = bus.read_i2c_block_data(PCA_ADDR, REG_INPUT_0, 2)
-    state0 = data[0]
-    state1 = data[1]
+# Track last input state (for edge detection)
+last_input_1 = [1]*16
+last_input_2 = [1]*16
 
-    if state0 != last_state0 or state1 != last_state1:
-        print("INT! Port0:", format(state0, "08b"),
-              "Port1:", format(state1, "08b"))
+# GPIO setup for INT pins
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(INT1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(INT2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        last_state0 = state0
-        last_state1 = state1
+print("[GAISMAS] Ready (poll on INT)")
 
-# =============================
-# GPIO SETUP
-# =============================
+# ---------------- HELPER ----------------
+def read_pca_inputs(addr):
+    p0 = bus.read_byte_data(addr, REG_INPUT_0)
+    p1 = bus.read_byte_data(addr, REG_INPUT_1)
+    return [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
 
-def setup_gpio():
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(INT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# ---------------- MAIN LOOP ----------------
+try:
+    while True:
 
-    GPIO.add_event_detect(
-        INT_PIN,
-        GPIO.FALLING,
-        callback=handle_interrupt,
-        bouncetime=1  # very small debounce for speed
-    )
+        # -------- FIRST SET --------
+        if GPIO.input(INT1_PIN) == 0:  # Only read PCA1 if INT active
+            inputs1 = read_pca_inputs(PCA1_ADDR)
+            for i, val in enumerate(inputs1):
+                if val == 0 and last_input_1[i] == 1:
+                    mask = 1 << i
+                    if pcf1_state & mask:
+                        pcf1_state &= ~mask
+                        print(f"[26] Relay {i+1} ON")
+                    else:
+                        pcf1_state |= mask
+                        print(f"[26] Relay {i+1} OFF")
+                    pcf1.write_gpio(pcf1_state)
+                last_input_1[i] = val
 
-# =============================
-# CLEAN EXIT
-# =============================
+        # -------- SECOND SET --------
+        if GPIO.input(INT2_PIN) == 0:  # Only read PCA2 if INT active
+            inputs2 = read_pca_inputs(PCA2_ADDR)
+            for i, val in enumerate(inputs2):
+                if val == 0 and last_input_2[i] == 1:
+                    mask = 1 << i
+                    if pcf2_state & mask:
+                        pcf2_state &= ~mask
+                        print(f"[27] Relay {i+1} ON")
+                    else:
+                        pcf2_state |= mask
+                        print(f"[27] Relay {i+1} OFF")
+                    pcf2.write_gpio(pcf2_state)
+                last_input_2[i] = val
 
-def cleanup(sig=None, frame=None):
+        time.sleep(POLL_INTERVAL)
+
+except KeyboardInterrupt:
+    print("Stopping, turning all relays OFF")
+    pcf1.write_gpio(0xFFFF)
+    pcf2.write_gpio(0xFFFF)
     GPIO.cleanup()
     bus.close()
-    sys.exit(0)
-
-signal.signal(signal.SIGINT, cleanup)
-signal.signal(signal.SIGTERM, cleanup)
-
-# =============================
-# MAIN
-# =============================
-
-if __name__ == "__main__":
-    setup_pca()
-    setup_gpio()
-
-    print("Interrupt system ready")
-
-    while True:
-        time.sleep(1)
