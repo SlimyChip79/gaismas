@@ -90,13 +90,17 @@ def process_simple_buttons(inputs):
         last_state_simple[idx] = val
 
 # ---------------- PROCESS FUNCTIONS ----------------
+# ---------------- PROCESS FUNCTIONS WITH DEBUG ----------------
 def process_debounce_buttons(inputs):
     now = time.time()
     for idx, (addr, pin, pcf, short_mask, long_mask) in enumerate(debounce_buttons):
-        val = inputs[addr][pin]  # active-low: 0 = pressed
+        val = inputs[addr][pin]  # active-low: 0 = pressed, 1 = released
+
+        print(f"[DEBUG] Button idx={idx}, addr={hex(addr)}, pin={pin}, val={val}")
 
         # Detect edge
         if val != last_state_debounce[idx]:
+            print(f"[DEBUG] Edge detected on idx={idx}, last={last_state_debounce[idx]} -> val={val}")
             debounce_time[idx] = now
 
         # Check debounce
@@ -105,23 +109,26 @@ def process_debounce_buttons(inputs):
             if val == 0 and press_start_time[idx] == 0:
                 press_start_time[idx] = now
                 long_press_triggered[idx] = False
+                print(f"[DEBUG] Press start idx={idx} at {now}")
 
             # Button held -> long press
             elif val == 0 and press_start_time[idx] != 0:
                 if not long_press_triggered[idx] and (now - press_start_time[idx] >= LONG_PRESS_THRESHOLD):
                     toggle_pcf(pcf, long_mask)
-                    print(f"[LONG PRESS] Relay {long_mask} TOGGLED")
                     long_press_triggered[idx] = True
+                    print(f"[LONG PRESS] idx={idx}, relay_mask={long_mask}, time={now}")
 
             # Button released
             elif val == 1 and press_start_time[idx] != 0:
                 if not long_press_triggered[idx]:
                     toggle_pcf(pcf, short_mask)
-                    print(f"[SHORT PRESS] Relay {short_mask} TOGGLED")
+                    print(f"[SHORT PRESS] idx={idx}, relay_mask={short_mask}, time={now}")
                 press_start_time[idx] = 0
                 long_press_triggered[idx] = False
+                print(f"[DEBUG] Button released idx={idx}")
 
         last_state_debounce[idx] = val
+
 
 
 # ---------------- MAIN LOOP ----------------
