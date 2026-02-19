@@ -74,16 +74,10 @@ def read_pca_inputs(addr):
 def toggle_pcf(pcf, mask):
     global pcf1_state, pcf2_state
     if pcf is pcf1:
-        if pcf1_state & mask:
-            pcf1_state &= ~mask
-        else:
-            pcf1_state |= mask
+        pcf1_state ^= mask
         pcf1.write_gpio(pcf1_state)
     else:
-        if pcf2_state & mask:
-            pcf2_state &= ~mask
-        else:
-            pcf2_state |= mask
+        pcf2_state ^= mask
         pcf2.write_gpio(pcf2_state)
 
 # ---------------- PROCESS FUNCTIONS ----------------
@@ -99,11 +93,13 @@ def process_debounce_buttons(inputs):
     now = time.time()
     for idx, (addr, pin, pcf, short_mask, long_mask) in enumerate(debounce_buttons):
         val = inputs[addr][pin]
-        # debounce
+
+        # debounce edge
         if val != last_state_debounce[idx]:
             debounce_time[idx] = now
+
         if (now - debounce_time[idx]) > DEBOUNCE_DELAY:
-            if val == 0:
+            if val == 0:  # pressed
                 if press_start_time[idx] == 0:
                     press_start_time[idx] = now
                     long_press_triggered[idx] = False
@@ -111,12 +107,13 @@ def process_debounce_buttons(inputs):
                     toggle_pcf(pcf, long_mask)
                     print(f"[LONG PRESS] Relay {long_mask} TOGGLED")
                     long_press_triggered[idx] = True
-            else:
+            else:  # released
                 if press_start_time[idx] != 0 and not long_press_triggered[idx]:
                     toggle_pcf(pcf, short_mask)
                     print(f"[SHORT PRESS] Relay {short_mask} TOGGLED")
                 press_start_time[idx] = 0
                 long_press_triggered[idx] = False
+
         last_state_debounce[idx] = val
 
 # ---------------- MAIN LOOP ----------------
