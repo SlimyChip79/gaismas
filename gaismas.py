@@ -51,8 +51,8 @@ simple_buttons = [
 
 # Structure 2: short press relay + long press relay
 debounce_buttons = [
-    (PCA1_ADDR, 2, pcf1, 1 << 2, 1 << 3),
-    (PCA2_ADDR, 4, pcf2, 1 << 4, 1 << 5),
+    (PCA2_ADDR, 0, pcf1, 1 << 1, 1 << 2),
+    (PCA2_ADDR, 1, pcf2, 1 << 3, 1 << 4),
 ]
 
 # ---------------- STATE TRACKERS ----------------
