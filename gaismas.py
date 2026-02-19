@@ -4,6 +4,7 @@ from smbus2 import SMBus
 import board
 import busio
 from adafruit_pcf8575 import PCF8575
+import RPi.GPIO as GPIO
 
 # ---------------- CONFIG ----------------
 I2C_BUS = 1
@@ -14,10 +15,13 @@ PCA2_ADDR = 0x22
 PCF1_ADDR = 0x26
 PCF2_ADDR = 0x27
 
+INT1_PIN = 17  # PCA1 INT
+INT2_PIN = 27  # PCA2 INT
+
 REG_INPUT_0 = 0x00
 REG_INPUT_1 = 0x01
 
-POLL_INTERVAL = 0.001  # fast polling
+POLL_INTERVAL = 0.001  # very fast
 
 # ---------------- INIT ----------------
 bus = SMBus(I2C_BUS)
@@ -33,19 +37,22 @@ pcf2_state = 0xFFFF
 pcf1.write_gpio(pcf1_state)
 pcf2.write_gpio(pcf2_state)
 
+# Setup INT pins for polling
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(INT1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(INT2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
 # ---------------- BUTTON ARRAYS ----------------
-# STRUCTURE 1: simple toggle
-# Format: (pca_addr, pin_index, pcf_obj, relay_mask)
+# Structure 1: simple toggle (pin -> relay)
 simple_buttons = [
     (PCA1_ADDR, 0, pcf1, 1 << 0),
     (PCA1_ADDR, 1, pcf1, 1 << 1),
 ]
 
-# STRUCTURE 2: short press relay + long press relay
-# Format: (pca_addr, pin_index, pcf_obj, short_mask, long_mask)
+# Structure 2: short press relay + long press relay
 debounce_buttons = [
-    (PCA2_ADDR, 1, pcf2, 1 << 1, 1 << 2),
-    (PCA2_ADDR, 2, pcf2, 1 << 3, 1 << 4),
+    (PCA1_ADDR, 2, pcf1, 1 << 2, 1 << 3),
+    (PCA2_ADDR, 4, pcf2, 1 << 4, 1 << 5),
 ]
 
 # ---------------- STATE TRACKERS ----------------
@@ -55,8 +62,8 @@ press_start_time = [0]*len(debounce_buttons)
 long_press_triggered = [False]*len(debounce_buttons)
 debounce_time = [0]*len(debounce_buttons)
 
-DEBOUNCE_DELAY = 0.02  # 20ms
-LONG_PRESS_THRESHOLD = 1.0  # 1 sec
+DEBOUNCE_DELAY = 0.02
+LONG_PRESS_THRESHOLD = 1.0
 
 # ---------------- HELPERS ----------------
 def read_pca_inputs(addr):
@@ -64,29 +71,20 @@ def read_pca_inputs(addr):
     p1 = bus.read_byte_data(addr, REG_INPUT_1)
     return [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
 
-def pcf_state(pcf):
-    return pcf1_state if pcf is pcf1 else pcf2_state
-
-def set_pcf_bit(pcf, mask, off=True):
+def toggle_pcf(pcf, mask):
     global pcf1_state, pcf2_state
     if pcf is pcf1:
-        if off:
-            pcf1_state |= mask
-        else:
+        if pcf1_state & mask:
             pcf1_state &= ~mask
+        else:
+            pcf1_state |= mask
         pcf1.write_gpio(pcf1_state)
     else:
-        if off:
-            pcf2_state |= mask
-        else:
+        if pcf2_state & mask:
             pcf2_state &= ~mask
+        else:
+            pcf2_state |= mask
         pcf2.write_gpio(pcf2_state)
-
-def toggle_pcf(pcf, mask):
-    if pcf_state(pcf) & mask:
-        set_pcf_bit(pcf, mask, False)
-    else:
-        set_pcf_bit(pcf, mask, True)
 
 # ---------------- PROCESS FUNCTIONS ----------------
 def process_simple_buttons(inputs):
@@ -124,11 +122,17 @@ def process_debounce_buttons(inputs):
 # ---------------- MAIN LOOP ----------------
 try:
     while True:
-        # read PCA inputs
-        inputs = {
-            PCA1_ADDR: read_pca_inputs(PCA1_ADDR),
-            PCA2_ADDR: read_pca_inputs(PCA2_ADDR)
-        }
+        # Poll INT pins first
+        inputs = {}
+        if GPIO.input(INT1_PIN) == 0:
+            inputs[PCA1_ADDR] = read_pca_inputs(PCA1_ADDR)
+        else:
+            inputs[PCA1_ADDR] = [1]*16
+
+        if GPIO.input(INT2_PIN) == 0:
+            inputs[PCA2_ADDR] = read_pca_inputs(PCA2_ADDR)
+        else:
+            inputs[PCA2_ADDR] = [1]*16
 
         process_simple_buttons(inputs)
         process_debounce_buttons(inputs)
@@ -140,3 +144,4 @@ except KeyboardInterrupt:
     pcf1.write_gpio(0xFFFF)
     pcf2.write_gpio(0xFFFF)
     bus.close()
+    GPIO.cleanup()
