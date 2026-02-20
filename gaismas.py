@@ -20,7 +20,7 @@ REG_INPUT_1  = 0x01
 # ---------------- TIMING ----------------
 LOOP_DELAY = 0.005          # 5ms loop
 debounce_delay = 50         # debounce time (ms)
-long_press_threshold = 1000 # hold time for long press (ms)
+long_press_threshold = 350 # hold time for long press (ms)
 
 # ================= INIT =================
 print("[GAISMAS] Initializing...")
