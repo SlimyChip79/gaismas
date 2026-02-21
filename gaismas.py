@@ -20,7 +20,7 @@ REG_INPUT_1  = 0x01
 # ---------------- TIMING ----------------
 LOOP_DELAY = 0.005          # 5ms loop
 debounce_delay = 50         # debounce time (ms)
-long_press_threshold = 350  # hold time for long press (ms)
+long_press_threshold = 350 # hold time for long press (ms)
 
 # ================= INIT =================
 print("[GAISMAS] Initializing...")
@@ -42,6 +42,7 @@ pcf2.write_gpio(pcf2_state)
 # ================= BUTTON STRUCTURES =================
 
 # -------- Structure 1: Simple Toggle --------
+# (PCA_addr, pin, pcf_board, relay_mask)
 simple_buttons = [
     (PCA1_ADDR, 0, pcf1, 1 << 0),
     (PCA1_ADDR, 1, pcf1, 1 << 1),
@@ -76,13 +77,18 @@ simple_buttons = [
 ]
 
 # -------- Structure 2: Short + Long Press --------
+# (PCA_addr, pin, short_pcf, short_mask, long_pcf, long_mask)
 debounce_buttons = [
-    (PCA2_ADDR, 15, pcf1, 1 << 14, pcf1, 1 << 15),
+    (PCA2_ADDR, 15, pcf1, 1 << 14,  pcf1, 1 << 15),
+
 ]
 
 # ================= STATE TRACKERS =================
+
+# Structure 1
 last_simple_state = [1] * len(simple_buttons)
 
+# Structure 2
 last_debounce_state = [1] * len(debounce_buttons)
 last_debounce_time = [0] * len(debounce_buttons)
 press_start_time = [0] * len(debounce_buttons)
@@ -96,24 +102,7 @@ def read_pca_inputs(addr):
         p1 = bus.read_byte_data(addr, REG_INPUT_1)
         return [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
     except:
-        return [1] * 16  # fail-safe
-
-def print_relay_action(pca_addr, pca_pin, pcf_board, relay_mask, action_type):
-    global pcf1_state, pcf2_state
-
-    if pcf_board is pcf1:
-        pcf_addr = PCF1_ADDR
-        current_state = pcf1_state
-    else:
-        pcf_addr = PCF2_ADDR
-        current_state = pcf2_state
-
-    relay_pin = relay_mask.bit_length() - 1
-    relay_status = "ON" if not (current_state & relay_mask) else "OFF"  # active LOW
-
-    print(f"[ACTION] PCA 0x{pca_addr:02X} PIN {pca_pin} "
-          f"→ PCF 0x{pcf_addr:02X} PIN {relay_pin} "
-          f"→ {relay_status} ({action_type})")
+        return [1]*16  # fail-safe (released)
 
 # ================= MAIN LOOP =================
 
@@ -122,16 +111,20 @@ try:
 
         current_time = int(time.time() * 1000)
 
+        # Read each PCA once per loop
         pca_inputs = {
             PCA1_ADDR: read_pca_inputs(PCA1_ADDR),
             PCA2_ADDR: read_pca_inputs(PCA2_ADDR),
         }
 
-        # ================= STRUCTURE 1 =================
+        # =====================================================
+        # STRUCTURE 1 — SIMPLE TOGGLE
+        # =====================================================
         for idx, (addr, pin, pcf, relay_mask) in enumerate(simple_buttons):
 
-            val = pca_inputs[addr][pin]
+            val = pca_inputs[addr][pin]  # 0 = pressed
 
+            # Detect falling edge (released -> pressed)
             if val == 0 and last_simple_state[idx] == 1:
 
                 if pcf is pcf1:
@@ -141,21 +134,24 @@ try:
                     pcf2_state ^= relay_mask
                     pcf2.write_gpio(pcf2_state)
 
-                print_relay_action(addr, pin, pcf, relay_mask, "TOGGLE")
+                print(f"[SIMPLE] Button {idx} toggled relay")
 
             last_simple_state[idx] = val
 
-        # ================= STRUCTURE 2 =================
+        # =====================================================
+        # STRUCTURE 2 — SHORT + LONG PRESS
+        # =====================================================
         for idx, (addr, pin, short_pcf, short_mask, long_pcf, long_mask) in enumerate(debounce_buttons):
 
-            val = pca_inputs[addr][pin]
+            val = pca_inputs[addr][pin]  # 0 = pressed
 
+            # Debounce timer reset
             if val != last_debounce_state[idx]:
                 last_debounce_time[idx] = current_time
 
             if (current_time - last_debounce_time[idx]) > debounce_delay:
 
-                # PRESSED
+                # ---------------- BUTTON PRESSED ----------------
                 if val == 0:
 
                     if press_start_time[idx] == 0:
@@ -166,6 +162,7 @@ try:
                         not long_press_triggered[idx]
                         and (current_time - press_start_time[idx] >= long_press_threshold)
                     ):
+                        # LONG PRESS
                         if long_pcf is pcf1:
                             pcf1_state ^= long_mask
                             pcf1.write_gpio(pcf1_state)
@@ -173,13 +170,13 @@ try:
                             pcf2_state ^= long_mask
                             pcf2.write_gpio(pcf2_state)
 
-                        print_relay_action(addr, pin, long_pcf, long_mask, "LONG")
+                        print(f"[DEBOUNCE] Button {idx} LONG PRESS")
                         long_press_triggered[idx] = True
 
-                # RELEASED
+                # ---------------- BUTTON RELEASED ----------------
                 else:
                     if press_start_time[idx] != 0 and not long_press_triggered[idx]:
-
+                        # SHORT PRESS
                         if short_pcf is pcf1:
                             pcf1_state ^= short_mask
                             pcf1.write_gpio(pcf1_state)
@@ -187,7 +184,7 @@ try:
                             pcf2_state ^= short_mask
                             pcf2.write_gpio(pcf2_state)
 
-                        print_relay_action(addr, pin, short_pcf, short_mask, "SHORT")
+                        print(f"[DEBOUNCE] Button {idx} SHORT PRESS")
 
                     press_start_time[idx] = 0
                     long_press_triggered[idx] = False
