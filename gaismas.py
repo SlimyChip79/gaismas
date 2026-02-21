@@ -48,7 +48,7 @@ simple_buttons = [
     (PCA1_ADDR, 8, pcf1, 1 << 0),# ieva griesti galvenais
     (PCA1_ADDR, 3, pcf1, 1 << 6),# virtuve
     (PCA2_ADDR, 1, pcf1, 1 << 1),# darbistaba griesti
-    (PCA2_ADDR, 11, pcf1, 1 << 7),# koridors vidus sledzis
+    (PCA1_ADDR, 11, pcf1, 1 << 7),# koridors vidus sledzis
     (PCA1_ADDR, 2, pcf2, 1 << 7),# tehniska
     (PCA1_ADDR, 5, pcf1, 1 << 2),# gulamistaba galvenais
     (PCA1_ADDR, 14, pcf1, 1 << 9),# vejtveris durvis
