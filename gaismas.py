@@ -65,7 +65,9 @@ simple_buttons = [
     (PCA2_ADDR, 15, pcf1, 1 << 14),# gulamistaba bra gulta
     (PCA2_ADDR, 14, pcf1, 1 << 14),# gulamistaba bra durvis
     (PCA2_ADDR, 5, pcf1, 1 << 15),# darbistaba bra
-
+    (PCA2_ADDR, 0, pcf1, 1 << 8),# pagrabs
+    (PCA1_ADDR, 15, pcf1, 1 << 9),# terase kreisais
+    (PCA2_ADDR, 2, pcf1, 1 << 10),# terase labais
 ]
 
 # -------- Structure 2: Short + Long Press --------
