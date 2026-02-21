@@ -50,7 +50,7 @@ simple_buttons = [
     (PCA2_ADDR, 1, pcf1, 1 << 1),# darbistaba griesti
     (PCA2_ADDR, 11, pcf1, 1 << 7),# koridors vidus sledzis
     (PCA1_ADDR, 2, pcf2, 1 << 7),# tehniska
-    (PCA1_ADDR, 7, pcf1, 1 << 2),# gulamistaba galvenais
+    (PCA2_ADDR, 7, pcf1, 1 << 2),# gulamistaba galvenais
 
 ]
 
