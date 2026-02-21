@@ -44,36 +44,14 @@ pcf2.write_gpio(pcf2_state)
 # -------- Structure 1: Simple Toggle --------
 # (PCA_addr, pin, pcf_board, relay_mask)
 simple_buttons = [
-    (PCA1_ADDR, 0, pcf1, 1 << 0),
-    (PCA1_ADDR, 1, pcf1, 1 << 1),
-    (PCA1_ADDR, 2, pcf1, 1 << 2),
-    (PCA1_ADDR, 3, pcf1, 1 << 3),
-    (PCA1_ADDR, 4, pcf1, 1 << 4),
-    (PCA1_ADDR, 5, pcf1, 1 << 5),
-    (PCA1_ADDR, 6, pcf1, 1 << 6),
-    (PCA1_ADDR, 7, pcf1, 1 << 7),
-    (PCA1_ADDR, 8, pcf1, 1 << 8),
-    (PCA1_ADDR, 9, pcf1, 1 << 9),
-    (PCA1_ADDR, 10, pcf1, 1 << 10),
-    (PCA1_ADDR, 11, pcf1, 1 << 11),
-    (PCA1_ADDR, 12, pcf1, 1 << 12),
-    (PCA1_ADDR, 13, pcf1, 1 << 13),
-    (PCA1_ADDR, 14, pcf1, 1 << 14),
-    (PCA1_ADDR, 15, pcf1, 1 << 15),
-    (PCA2_ADDR, 0, pcf2, 1 << 0),
-    (PCA2_ADDR, 1, pcf2, 1 << 1),
-    (PCA2_ADDR, 2, pcf2, 1 << 2),
-    (PCA2_ADDR, 3, pcf2, 1 << 3),
-    (PCA2_ADDR, 4, pcf2, 1 << 4),
-    (PCA2_ADDR, 5, pcf2, 1 << 5),
-    (PCA2_ADDR, 6, pcf2, 1 << 6),
-    (PCA2_ADDR, 7, pcf2, 1 << 7),
-    (PCA2_ADDR, 8, pcf2, 1 << 8),
-    (PCA2_ADDR, 9, pcf2, 1 << 9),
-    (PCA2_ADDR, 10, pcf2, 1 << 10),
-    (PCA2_ADDR, 11, pcf2, 1 << 11),
-    (PCA2_ADDR, 12, pcf2, 1 << 12),
-    (PCA2_ADDR, 13, pcf2, 1 << 13),
+    (PCA1_ADDR, 0, pcf1, 1 << 4),# janis griesti galvenais
+    (PCA1_ADDR, 8, pcf1, 1 << 0),# ieva griesti galvenais
+    (PCA1_ADDR, 3, pcf1, 1 << 6),# virtuve
+    (PCA2_ADDR, 1, pcf1, 1 << 1),# darbistaba griesti
+    (PCA2_ADDR, 11, pcf1, 1 << 7),# koridors vidus sledzis
+    (PCA1_ADDR, 2, pcf2, 1 << 7),# tehniska
+    (PCA1_ADDR, 7, pcf1, 1 << 2),# gulamistaba galvenais
+
 ]
 
 # -------- Structure 2: Short + Long Press --------
