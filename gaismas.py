@@ -52,28 +52,27 @@ simple_buttons = [
     (PCA1_ADDR, 2, pcf2, 1 << 7),# tehniska
     (PCA1_ADDR, 5, pcf1, 1 << 2),# gulamistaba galvenais
     (PCA1_ADDR, 14, pcf1, 1 << 9),# vejtveris durvis
-    (PCA2_ADDR, 4, pcf1, 1 << 9),# vejtveris koridors
     (PCA1_ADDR, 6, pcf1, 1 << 3),# maza vanna
-    (PCA1_ADDR, 4, pcf1, 1 << 5),# viesistaba
     (PCA2_ADDR, 7, pcf1, 1 << 8),# janis bra durvis
-    (PCA2_ADDR, 6, pcf1, 1 << 8),# janis bra siena
     (PCA1_ADDR, 7, pcf1, 1 << 10),#  skapis
     (PCA1_ADDR, 1, pcf1, 1 << 11),# liela vanna 
     (PCA1_ADDR, 12, pcf1, 1 << 12),# ieva bra durvis
-    (PCA1_ADDR, 13, pcf1, 1 << 12),# ieva bra gulta
     (PCA1_ADDR, 9, pcf1, 1 << 13),# maza vanna bra
-    (PCA2_ADDR, 15, pcf1, 1 << 14),# gulamistaba bra gulta
     (PCA2_ADDR, 14, pcf1, 1 << 14),# gulamistaba bra durvis
     (PCA2_ADDR, 5, pcf1, 1 << 15),# darbistaba bra
     (PCA2_ADDR, 0, pcf2, 1 << 8),# pagrabs
-    (PCA1_ADDR, 15, pcf2, 1 << 9),# terase kreisais
-    (PCA2_ADDR, 2, pcf2, 1 << 10),# terase labais
 ]
 
 # -------- Structure 2: Short + Long Press --------
 # (PCA_addr, pin, short_pcf, short_mask, long_pcf, long_mask)
 debounce_buttons = [
-    (PCA2_ADDR, 8, pcf1, 1 << 14,  pcf1, 1 << 15),
+    (PCA2_ADDR, 6, pcf1, 1 << 8,  pcf1, 1 << 4),# janis bra siena
+    (PCA1_ADDR, 13, pcf1, 1 << 12,  pcf1, 1 << 0),# ieva bra siena
+    (PCA2_ADDR, 15, pcf1, 1 << 14,  pcf1, 1 << 2),#  gulamiistaba bra gulta
+    (PCA1_ADDR, 4, pcf1, 1 << 5,  pcf1, 1 << 7),# viesistaba ar koridoru long
+    (PCA2_ADDR, 2, pcf2, 1 << 10,  pcf2, 1 << 9),# terase labais ara 
+    (PCA1_ADDR, 15, pcf1, 1 << 5,  pcf1, 1 << 7),# terase kreisais
+    (PCA2_ADDR, 4, pcf1, 1 << 9,  pcf1, 1 << 7),# vejveriis koridors
 
 ]
 
