@@ -47,7 +47,6 @@ simple_buttons = [
     (PCA1_ADDR, 0, pcf1, 1 << 4),# janis griesti galvenais
     (PCA1_ADDR, 8, pcf1, 1 << 0),# ieva griesti galvenais
     (PCA1_ADDR, 3, pcf1, 1 << 6),# virtuve
-    (PCA2_ADDR, 1, pcf1, 1 << 1),# darbistaba griesti
     (PCA1_ADDR, 11, pcf1, 1 << 7),# koridors vidus sledzis
     (PCA1_ADDR, 2, pcf2, 1 << 7),# tehniska
     (PCA1_ADDR, 5, pcf1, 1 << 2),# gulamistaba galvenais
@@ -59,7 +58,6 @@ simple_buttons = [
     (PCA1_ADDR, 12, pcf1, 1 << 12),# ieva bra durvis
     (PCA1_ADDR, 9, pcf1, 1 << 13),# maza vanna bra
     (PCA2_ADDR, 14, pcf1, 1 << 14),# gulamistaba bra durvis
-    (PCA2_ADDR, 5, pcf1, 1 << 15),# darbistaba bra
     (PCA2_ADDR, 0, pcf2, 1 << 8),# pagrabs
 ]
 
@@ -73,6 +71,8 @@ debounce_buttons = [
     (PCA2_ADDR, 2, pcf2, 1 << 10,  pcf2, 1 << 9),# terase labais ara 
     (PCA1_ADDR, 15, pcf1, 1 << 5,  pcf1, 1 << 7),# terase kreisais
     (PCA2_ADDR, 4, pcf1, 1 << 9,  pcf1, 1 << 7),# vejveriis koridors
+    (PCA2_ADDR, 1, pcf1, 1 << 15,  pcf1, 1 << 1),# darbistaba durvis
+    (PCA2_ADDR, 5, pcf1, 1 << 15,  pcf1, 1 << 1),# drabistaba siena
 
 ]
 
