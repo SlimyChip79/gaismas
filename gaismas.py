@@ -73,7 +73,7 @@ simple_buttons = [
 # -------- Structure 2: Short + Long Press --------
 # (PCA_addr, pin, short_pcf, short_mask, long_pcf, long_mask)
 debounce_buttons = [
-    (PCA2_ADDR, 15, pcf1, 1 << 14,  pcf1, 1 << 15),
+    (PCA2_ADDR, 8, pcf1, 1 << 14,  pcf1, 1 << 15),
 
 ]
 
