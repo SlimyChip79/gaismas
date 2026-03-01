@@ -19,7 +19,7 @@ REG_INPUT_1  = 0x01
 
 # ---------------- TIMING ----------------
 LOOP_DELAY = 0.05          # 5ms loop
-debounce_delay = 50         # debounce time (ms)
+debounce_delay = 100         # debounce time (ms)
 long_press_threshold = 350 # hold time for long press (ms)
 
 # ================= INIT =================
