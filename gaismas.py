@@ -117,8 +117,8 @@ try:
 
             val = pca_inputs[addr][pin]  # 0 = pressed
 
-            # Detect falling edge (released -> pressed)
-            if val == 0 and last_simple_state[idx] == 1:
+    # Detect rising edge (pressed -> released)
+    if val == 1 and last_simple_state[idx] == 0:
 
                 if pcf is pcf1:
                     pcf1_state ^= relay_mask
