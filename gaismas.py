@@ -110,26 +110,26 @@ try:
             PCA2_ADDR: read_pca_inputs(PCA2_ADDR),
         }
 
-# =====================================================
-# STRUCTURE 1 — SIMPLE TOGGLE (toggle on release)
-# =====================================================
-for idx, (addr, pin, pcf, relay_mask) in enumerate(simple_buttons):
+        # =====================================================
+        # STRUCTURE 1 — SIMPLE TOGGLE (toggle on release)
+        # =====================================================
+        for idx, (addr, pin, pcf, relay_mask) in enumerate(simple_buttons):
 
-    val = pca_inputs[addr][pin]  # 0 = pressed
+            val = pca_inputs[addr][pin]  # 0 = pressed
 
-    # Detect release AFTER press
-    if last_simple_state[idx] == 0 and val == 1:
+            # Detect release AFTER press
+            if last_simple_state[idx] == 0 and val == 1:
 
-        if pcf is pcf1:
-            pcf1_state ^= relay_mask
-            pcf1.write_gpio(pcf1_state)
-        else:
-            pcf2_state ^= relay_mask
-            pcf2.write_gpio(pcf2_state)
+                if pcf is pcf1:
+                    pcf1_state ^= relay_mask
+                    pcf1.write_gpio(pcf1_state)
+                else:
+                    pcf2_state ^= relay_mask
+                    pcf2.write_gpio(pcf2_state)
 
-        print(f"[SIMPLE] Button {idx} toggled relay")
+                print(f"[SIMPLE] Button {idx} toggled relay")
 
-    last_simple_state[idx] = val
+            last_simple_state[idx] = val
 
         # =====================================================
         # STRUCTURE 2 — SHORT + LONG PRESS
