@@ -18,9 +18,9 @@ REG_INPUT_0  = 0x00
 REG_INPUT_1  = 0x01
 
 # ---------------- TIMING ----------------
-LOOP_DELAY = 0.05          # 5ms loop
-debounce_delay = 100         # debounce time (ms)
-long_press_threshold = 350 # hold time for long press (ms)
+LOOP_DELAY = 0.05
+debounce_delay = 100
+long_press_threshold = 350
 
 # ================= INIT =================
 print("[GAISMAS] Initializing...")
@@ -41,47 +41,40 @@ pcf2.write_gpio(pcf2_state)
 
 # ================= BUTTON STRUCTURES =================
 
-# -------- Structure 1: Simple Toggle --------
-# (PCA_addr, pin, pcf_board, relay_mask)
 simple_buttons = [
-    (PCA1_ADDR, 0, pcf1, 1 << 4),# janis griesti galvenais
-    (PCA1_ADDR, 8, pcf1, 1 << 0),# ieva griesti galvenais
-    (PCA1_ADDR, 3, pcf1, 1 << 6),# virtuve
-    (PCA1_ADDR, 11, pcf1, 1 << 7),# koridors vidus sledzis
-    (PCA1_ADDR, 2, pcf2, 1 << 7),# tehniska
-    (PCA1_ADDR, 5, pcf1, 1 << 2),# gulamistaba galvenais
-    (PCA1_ADDR, 14, pcf1, 1 << 9),# vejtveris durvis
-    (PCA1_ADDR, 6, pcf1, 1 << 3),# maza vanna
-    (PCA2_ADDR, 7, pcf1, 1 << 8),# janis bra durvis
-    (PCA1_ADDR, 7, pcf1, 1 << 10),#  skapis
-    (PCA1_ADDR, 1, pcf1, 1 << 11),# liela vanna 
-    (PCA1_ADDR, 12, pcf1, 1 << 12),# ieva bra durvis
-    (PCA1_ADDR, 9, pcf1, 1 << 13),# maza vanna bra
-    (PCA2_ADDR, 14, pcf1, 1 << 14),# gulamistaba bra durvis
-    (PCA2_ADDR, 0, pcf2, 1 << 8),# pagrabs
+    (PCA1_ADDR, 0, pcf1, 1 << 4),
+    (PCA1_ADDR, 8, pcf1, 1 << 0),
+    (PCA1_ADDR, 3, pcf1, 1 << 6),
+    (PCA1_ADDR, 11, pcf1, 1 << 7),
+    (PCA1_ADDR, 2, pcf2, 1 << 7),
+    (PCA1_ADDR, 5, pcf1, 1 << 2),
+    (PCA1_ADDR, 14, pcf1, 1 << 9),
+    (PCA1_ADDR, 6, pcf1, 1 << 3),
+    (PCA2_ADDR, 7, pcf1, 1 << 8),
+    (PCA1_ADDR, 7, pcf1, 1 << 10),
+    (PCA1_ADDR, 1, pcf1, 1 << 11),
+    (PCA1_ADDR, 12, pcf1, 1 << 12),
+    (PCA1_ADDR, 9, pcf1, 1 << 13),
+    (PCA2_ADDR, 14, pcf1, 1 << 14),
+    (PCA2_ADDR, 0, pcf2, 1 << 8),
 ]
 
-# -------- Structure 2: Short + Long Press --------
-# (PCA_addr, pin, short_pcf, short_mask, long_pcf, long_mask)
 debounce_buttons = [
-    (PCA2_ADDR, 6, pcf1, 1 << 8,  pcf1, 1 << 4),# janis bra siena
-    (PCA1_ADDR, 13, pcf1, 1 << 12,  pcf1, 1 << 0),# ieva bra siena
-    (PCA2_ADDR, 15, pcf1, 1 << 14,  pcf1, 1 << 2),#  gulamiistaba bra gulta
-    (PCA1_ADDR, 4, pcf1, 1 << 5,  pcf1, 1 << 7),# viesistaba ar koridoru long
-    (PCA2_ADDR, 2, pcf2, 1 << 10,  pcf2, 1 << 9),# terase labais ara 
-    (PCA1_ADDR, 15, pcf1, 1 << 5,  pcf1, 1 << 7),# terase kreisais
-    (PCA2_ADDR, 4, pcf1, 1 << 9,  pcf1, 1 << 7),# vejveriis koridors
-    (PCA2_ADDR, 1, pcf1, 1 << 15,  pcf1, 1 << 1),# darbistaba durvis
-    (PCA2_ADDR, 5, pcf1, 1 << 15,  pcf1, 1 << 1),# drabistaba siena
-
+    (PCA2_ADDR, 6, pcf1, 1 << 8,  pcf1, 1 << 4),
+    (PCA1_ADDR, 13, pcf1, 1 << 12,  pcf1, 1 << 0),
+    (PCA2_ADDR, 15, pcf1, 1 << 14,  pcf1, 1 << 2),
+    (PCA1_ADDR, 4, pcf1, 1 << 5,  pcf1, 1 << 7),
+    (PCA2_ADDR, 2, pcf2, 1 << 10,  pcf2, 1 << 9),
+    (PCA1_ADDR, 15, pcf1, 1 << 5,  pcf1, 1 << 7),
+    (PCA2_ADDR, 4, pcf1, 1 << 9,  pcf1, 1 << 7),
+    (PCA2_ADDR, 1, pcf1, 1 << 15,  pcf1, 1 << 1),
+    (PCA2_ADDR, 5, pcf1, 1 << 15,  pcf1, 1 << 1),
 ]
 
 # ================= STATE TRACKERS =================
 
-# Structure 1
 last_simple_state = [1] * len(simple_buttons)
 
-# Structure 2
 last_debounce_state = [1] * len(debounce_buttons)
 last_debounce_time = [0] * len(debounce_buttons)
 press_start_time = [0] * len(debounce_buttons)
@@ -95,7 +88,7 @@ def read_pca_inputs(addr):
         p1 = bus.read_byte_data(addr, REG_INPUT_1)
         return [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
     except:
-        return [1]*16  # fail-safe (released)
+        return [1]*16
 
 # ================= MAIN LOOP =================
 
@@ -104,20 +97,19 @@ try:
 
         current_time = int(time.time() * 1000)
 
-        # Read each PCA once per loop
         pca_inputs = {
             PCA1_ADDR: read_pca_inputs(PCA1_ADDR),
             PCA2_ADDR: read_pca_inputs(PCA2_ADDR),
         }
 
         # =====================================================
-        # STRUCTURE 1 — SIMPLE TOGGLE (toggle on release)
+        # STRUCTURE 1 — SIMPLE TOGGLE (ON RELEASE)
         # =====================================================
         for idx, (addr, pin, pcf, relay_mask) in enumerate(simple_buttons):
 
             val = pca_inputs[addr][pin]  # 0 = pressed
 
-            # Detect release AFTER press
+            # Toggle on release (pressed -> released)
             if last_simple_state[idx] == 0 and val == 1:
 
                 if pcf is pcf1:
@@ -136,15 +128,13 @@ try:
         # =====================================================
         for idx, (addr, pin, short_pcf, short_mask, long_pcf, long_mask) in enumerate(debounce_buttons):
 
-            val = pca_inputs[addr][pin]  # 0 = pressed
+            val = pca_inputs[addr][pin]
 
-            # Debounce timer reset
             if val != last_debounce_state[idx]:
                 last_debounce_time[idx] = current_time
 
             if (current_time - last_debounce_time[idx]) > debounce_delay:
 
-                # ---------------- BUTTON PRESSED ----------------
                 if val == 0:
 
                     if press_start_time[idx] == 0:
@@ -155,7 +145,7 @@ try:
                         not long_press_triggered[idx]
                         and (current_time - press_start_time[idx] >= long_press_threshold)
                     ):
-                        # LONG PRESS
+
                         if long_pcf is pcf1:
                             pcf1_state ^= long_mask
                             pcf1.write_gpio(pcf1_state)
@@ -166,10 +156,9 @@ try:
                         print(f"[DEBOUNCE] Button {idx} LONG PRESS")
                         long_press_triggered[idx] = True
 
-                # ---------------- BUTTON RELEASED ----------------
                 else:
                     if press_start_time[idx] != 0 and not long_press_triggered[idx]:
-                        # SHORT PRESS
+
                         if short_pcf is pcf1:
                             pcf1_state ^= short_mask
                             pcf1.write_gpio(pcf1_state)
