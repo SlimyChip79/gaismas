@@ -61,29 +61,32 @@ def toggle(pcf_id, mask):
     global pcf1_state, pcf2_state
 
     if pcf_id == 1:
-        before = pcf1_state
         pcf1_state ^= mask
-        after = pcf1_state
-
-        if before & mask:
-            logging.info(f"RELAY PCF1 {mask:#06x} -> ON")
-        else:
-            logging.info(f"RELAY PCF1 {mask:#06x} -> OFF")
-
     else:
-        before = pcf2_state
         pcf2_state ^= mask
-        after = pcf2_state
-
-        if before & mask:
-            logging.info(f"RELAY PCF2 {mask:#06x} -> ON")
-        else:
-            logging.info(f"RELAY PCF2 {mask:#06x} -> OFF")
 
 
 def write_outputs():
+
+    global pcf1_state, pcf2_state
+
+    # Write
     pcf_write(PCF1_ADDR, pcf1_state)
     pcf_write(PCF2_ADDR, pcf2_state)
+
+    # Re-read for verification
+    read1 = pcf_read(PCF1_ADDR)
+    read2 = pcf_read(PCF2_ADDR)
+
+    if read1 != pcf1_state:
+        logging.warning(f"PCF1 MISMATCH! W:{pcf1_state:016b} R:{read1:016b}")
+
+    if read2 != pcf2_state:
+        logging.warning(f"PCF2 MISMATCH! W:{pcf2_state:016b} R:{read2:016b}")
+
+    # Log output packages only if changed
+    logging.info(f"OUTPUT PCF1 PACKAGE: {pcf1_state:016b}")
+    logging.info(f"OUTPUT PCF2 PACKAGE: {pcf2_state:016b}")
 
 
 # ================= STARTUP =================
@@ -95,7 +98,7 @@ time.sleep(0.1)
 
 
 # ================= INPUT MAPPING =================
-# (YOUR EXACT ORIGINAL MAPPING — NOT REMOVED)
+# YOUR FULL ORIGINAL MAPPING (UNCHANGED)
 
 simple_buttons = [
     (PCA1_ADDR, 0, 1, 1 << 4),
@@ -150,7 +153,7 @@ try:
             PCA2_ADDR: pca_read(PCA2_ADDR)
         }
 
-        # -------- LOG INPUT PACKAGES --------
+        # -------- INPUT PACKAGE LOG --------
         for addr in [PCA1_ADDR, PCA2_ADDR]:
             if pca[addr] != last_inputs[addr]:
                 logging.info(
@@ -191,7 +194,9 @@ try:
                 press_time[i] = 0
                 long_done[i] = False
 
+        # -------- OUTPUT WRITE + VERIFY --------
         write_outputs()
+
         time.sleep(LOOP_DELAY)
 
 
