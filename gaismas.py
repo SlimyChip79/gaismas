@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import time
+import logging
 from smbus2 import SMBus
 
 # ================= CONFIG =================
@@ -18,9 +19,16 @@ REG_INPUT1 = 0x01
 LOOP_DELAY = 0.01
 LONG_PRESS = 0.35
 
+# ================= LOGGING =================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
 # ================= INIT =================
 
-print("GAISMAS starting...")
+logging.info("GAISMAS starting...")
 
 bus = SMBus(I2C_BUS)
 
@@ -53,7 +61,7 @@ def toggle(pcf_id, mask):
 
         if before != pcf1_state:
             pcf_write(PCF1_ADDR, pcf1_state)
-            print("RELAY PCF1 ->", format(pcf1_state, "016b"))
+            logging.info(f"RELAY PCF1 -> {format(pcf1_state, '016b')}")
 
     else:
         before = pcf2_state
@@ -61,7 +69,7 @@ def toggle(pcf_id, mask):
 
         if before != pcf2_state:
             pcf_write(PCF2_ADDR, pcf2_state)
-            print("RELAY PCF2 ->", format(pcf2_state, "016b"))
+            logging.info(f"RELAY PCF2 -> {format(pcf2_state, '016b')}")
 
 
 # ================= INPUT MAPPING =================
@@ -152,7 +160,7 @@ try:
 
 except KeyboardInterrupt:
 
-    print("Stopping, turning relays OFF")
+    logging.info("Stopping, turning relays OFF")
 
     pcf_write(PCF1_ADDR, 0xFFFF)
     pcf_write(PCF2_ADDR, 0xFFFF)
