@@ -67,34 +67,36 @@ def toggle(pcf_id, mask):
 
 
 def write_outputs():
-
     global pcf1_state, pcf2_state
 
-    # Write
-    pcf_write(PCF1_ADDR, pcf1_state)
-    pcf_write(PCF2_ADDR, pcf2_state)
+    # Read current real hardware state once
+    current1 = pcf_read(PCF1_ADDR)
+    current2 = pcf_read(PCF2_ADDR)
 
-    # Re-read for verification
-    read1 = pcf_read(PCF1_ADDR)
-    read2 = pcf_read(PCF2_ADDR)
+    # Only act if something actually changed
+    if current1 != pcf1_state:
+        pcf_write(PCF1_ADDR, pcf1_state)
 
-    if read1 != pcf1_state:
-        logging.warning(f"PCF1 MISMATCH! W:{pcf1_state:016b} R:{read1:016b}")
+        # Verify once
+        verify1 = pcf_read(PCF1_ADDR)
+        if verify1 != pcf1_state:
+            logging.warning(
+                f"PCF1 VERIFY FAIL | W:{pcf1_state:016b} R:{verify1:016b}"
+            )
 
-    if read2 != pcf2_state:
-        logging.warning(f"PCF2 MISMATCH! W:{pcf2_state:016b} R:{read2:016b}")
+        logging.info(f"OUTPUT PCF1 PACKAGE: {pcf1_state:016b}")
 
-    # Log output packages only if changed
-    logging.info(f"OUTPUT PCF1 PACKAGE: {pcf1_state:016b}")
-    logging.info(f"OUTPUT PCF2 PACKAGE: {pcf2_state:016b}")
+    if current2 != pcf2_state:
+        pcf_write(PCF2_ADDR, pcf2_state)
 
+        # Verify once
+        verify2 = pcf_read(PCF2_ADDR)
+        if verify2 != pcf2_state:
+            logging.warning(
+                f"PCF2 VERIFY FAIL | W:{pcf2_state:016b} R:{verify2:016b}"
+            )
 
-# ================= STARTUP =================
-
-pcf_write(PCF1_ADDR, pcf1_state)
-pcf_write(PCF2_ADDR, pcf2_state)
-
-time.sleep(0.1)
+        logging.info(f"OUTPUT PCF2 PACKAGE: {pcf2_state:016b}")
 
 
 # ================= INPUT MAPPING =================
