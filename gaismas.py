@@ -69,30 +69,43 @@ def toggle(pcf_id, mask):
 def write_outputs():
     global pcf1_state, pcf2_state
 
-    # ---- WRITE ----
-    pcf_write(PCF1_ADDR, pcf1_state)
-    pcf_write(PCF2_ADDR, pcf2_state)
+    # Read current hardware state
+    current1 = pcf_read(PCF1_ADDR)
+    current2 = pcf_read(PCF2_ADDR)
 
-    logging.info(f"OUTPUT WRITE PCF1 -> {pcf1_state:016b}")
-    logging.info(f"OUTPUT WRITE PCF2 -> {pcf2_state:016b}")
+    # ---------------- PCF1 ----------------
+    if current1 != pcf1_state:
 
-    # ---- VERIFY (Recheck) ----
-    verify1 = pcf_read(PCF1_ADDR)
-    verify2 = pcf_read(PCF2_ADDR)
+        # WRITE
+        pcf_write(PCF1_ADDR, pcf1_state)
+        logging.info(f"[OUTPUT WRITE] PCF1 -> {pcf1_state:016b}")
 
-    if verify1 != pcf1_state:
-        logging.warning(
-            f"OUTPUT VERIFY FAIL PCF1 | W:{pcf1_state:016b} R:{verify1:016b}"
-        )
-    else:
-        logging.info(f"OUTPUT VERIFY OK PCF1")
+        # VERIFY (Recheck)
+        verify1 = pcf_read(PCF1_ADDR)
 
-    if verify2 != pcf2_state:
-        logging.warning(
-            f"OUTPUT VERIFY FAIL PCF2 | W:{pcf2_state:016b} R:{verify2:016b}"
-        )
-    else:
-        logging.info(f"OUTPUT VERIFY OK PCF2")
+        if verify1 != pcf1_state:
+            logging.warning(
+                f"[OUTPUT VERIFY FAIL] PCF1 | W:{pcf1_state:016b} R:{verify1:016b}"
+            )
+        else:
+            logging.info(f"[OUTPUT VERIFY OK] PCF1")
+
+    # ---------------- PCF2 ----------------
+    if current2 != pcf2_state:
+
+        # WRITE
+        pcf_write(PCF2_ADDR, pcf2_state)
+        logging.info(f"[OUTPUT WRITE] PCF2 -> {pcf2_state:016b}")
+
+        # VERIFY (Recheck)
+        verify2 = pcf_read(PCF2_ADDR)
+
+        if verify2 != pcf2_state:
+            logging.warning(
+                f"[OUTPUT VERIFY FAIL] PCF2 | W:{pcf2_state:016b} R:{verify2:016b}"
+            )
+        else:
+            logging.info(f"[OUTPUT VERIFY OK] PCF2")
 
 
 # ================= INPUT MAPPING =================
