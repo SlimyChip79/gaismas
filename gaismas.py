@@ -40,6 +40,10 @@ bus = SMBus(I2C_BUS)
 pcf1_state = 0xFFFF
 pcf2_state = 0xFFFF
 
+# Track last written state (IMPORTANT FIX)
+last_pcf1_state = None
+last_pcf2_state = None
+
 # ================= LOW LEVEL I2C =================
 
 def pcf_write(addr, value):
@@ -50,20 +54,10 @@ def pcf_write(addr, value):
 
     bus.write_i2c_block_data(addr, low, [high])
 
-def pcf_read(addr):
-    data = bus.read_i2c_block_data(addr, 0, 2)
-    value = data[0] | (data[1] << 8)
-
-    log(f"[PCF READ] 0x{addr:X} raw={data} value=0x{value:04X}")
-
-    return value
-
 def pca_read(addr):
     try:
         p0 = bus.read_byte_data(addr, REG_INPUT0)
         p1 = bus.read_byte_data(addr, REG_INPUT1)
-
-        log(f"[PCA READ] 0x{addr:X} REG0=0x{p0:02X} REG1=0x{p1:02X}")
 
         pins = []
         for i in range(8):
@@ -74,8 +68,8 @@ def pca_read(addr):
         return pins
 
     except Exception as e:
-        log(f"[PCA ERROR] {e}")
-        return [1]*16
+        log(f"[PCA ERROR] 0x{addr:X} {e}")
+        return [1] * 16
 
 # ================= RELAY CONTROL =================
 
@@ -83,16 +77,9 @@ def toggle(pcf_id, mask):
     global pcf1_state, pcf2_state
 
     if pcf_id == 1:
-        before = pcf1_state
         pcf1_state ^= mask
-        after = pcf1_state
     else:
-        before = pcf2_state
         pcf2_state ^= mask
-        after = pcf2_state
-
-    log(f"[TOGGLE] pcf={pcf_id} mask=0x{mask:04X} "
-        f"before=0x{before:04X} after=0x{after:04X}")
 
 # ================= STARTUP RELAYS OFF =================
 
@@ -153,7 +140,7 @@ try:
             PCA2_ADDR: pca_read(PCA2_ADDR)
         }
 
-        # SIMPLE BUTTONS
+        # -------- SIMPLE BUTTONS --------
 
         for i, (addr, pin, pcf_id, mask) in enumerate(simple_buttons):
 
@@ -165,7 +152,7 @@ try:
 
             last_simple[i] = val
 
-        # SHORT + LONG PRESS
+        # -------- SHORT + LONG PRESS --------
 
         for i, (addr, pin, spcf, smask, lpcf, lmask) in enumerate(debounce_buttons):
 
@@ -191,10 +178,15 @@ try:
                 press_time[i] = 0
                 long_done[i] = False
 
-        # WRITE OUTPUTS
+        # -------- WRITE ONLY IF CHANGED (FIX) --------
 
-        pcf_write(PCF1_ADDR, pcf1_state)
-        pcf_write(PCF2_ADDR, pcf2_state)
+        if pcf1_state != last_pcf1_state:
+            pcf_write(PCF1_ADDR, pcf1_state)
+            last_pcf1_state = pcf1_state
+
+        if pcf2_state != last_pcf2_state:
+            pcf_write(PCF2_ADDR, pcf2_state)
+            last_pcf2_state = pcf2_state
 
         time.sleep(LOOP_DELAY)
 
