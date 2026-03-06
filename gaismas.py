@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import time
 from smbus2 import SMBus
 
@@ -27,7 +26,6 @@ print("GAISMAS starting...")
 
 bus = SMBus(I2C_BUS)
 
-# relay states (active LOW)
 pcf1_state = 0xFFFF
 pcf2_state = 0xFFFF
 
@@ -35,23 +33,18 @@ pcf2_state = 0xFFFF
 # ================= LOW LEVEL I2C =================
 
 def pcf_write(addr, value):
-
     low = value & 0xFF
     high = (value >> 8) & 0xFF
-
     bus.write_i2c_block_data(addr, low, [high])
 
 
 def pcf_read(addr):
-
     data = bus.read_i2c_block_data(addr, 0, 2)
     return data[0] | (data[1] << 8)
 
 
 def pca_read(addr):
-
     try:
-
         p0 = bus.read_byte_data(addr, REG_INPUT0)
         p1 = bus.read_byte_data(addr, REG_INPUT1)
 
@@ -66,7 +59,6 @@ def pca_read(addr):
         return pins
 
     except:
-
         return [1]*16
 
 
@@ -89,10 +81,8 @@ def write_outputs():
     pcf_write(PCF1_ADDR, pcf1_state)
     pcf_write(PCF2_ADDR, pcf2_state)
 
-    # verify (fix rare corruption)
-
+    # verify to prevent bit corruption
     try:
-
         if pcf_read(PCF1_ADDR) != pcf1_state:
             pcf_write(PCF1_ADDR, pcf1_state)
 
@@ -110,27 +100,49 @@ pcf_write(PCF2_ADDR, pcf2_state)
 
 time.sleep(0.1)
 
-# ================= BUTTON STRUCTURES =================
+
+# ================= INPUT MAPPING =================
+# (YOUR EXACT MAPPING)
 
 simple_buttons = [
-    (PCA1_ADDR,0,1,1<<4),
-    (PCA1_ADDR,8,1,1<<0),
-    (PCA1_ADDR,3,1,1<<6),
-    (PCA1_ADDR,11,1,1<<7),
-    (PCA1_ADDR,2,2,1<<7),
+    (PCA1_ADDR, 0, 1, 1 << 4),
+    (PCA1_ADDR, 8, 1, 1 << 0),
+    (PCA1_ADDR, 3, 1, 1 << 6),
+    (PCA1_ADDR, 11, 1, 1 << 7),
+    (PCA1_ADDR, 2, 2, 1 << 7),
+    (PCA1_ADDR, 5, 1, 1 << 2),
+    (PCA1_ADDR, 14, 1, 1 << 9),
+    (PCA1_ADDR, 6, 1, 1 << 3),
+    (PCA2_ADDR, 7, 1, 1 << 8),
+    (PCA1_ADDR, 7, 1, 1 << 10),
+    (PCA1_ADDR, 1, 1, 1 << 11),
+    (PCA1_ADDR, 12, 1, 1 << 12),
+    (PCA1_ADDR, 9, 1, 1 << 13),
+    (PCA2_ADDR, 14, 1, 1 << 14),
+    (PCA2_ADDR, 0, 2, 1 << 8),
 ]
 
+
 debounce_buttons = [
-    (PCA2_ADDR,6,1,1<<8,1,1<<4),
-    (PCA1_ADDR,13,1,1<<12,1,1<<0),
+    (PCA2_ADDR, 6, 1, 1 << 8, 1, 1 << 4),
+    (PCA1_ADDR, 13, 1, 1 << 12, 1, 1 << 0),
+    (PCA2_ADDR, 15, 1, 1 << 14, 1, 1 << 2),
+    (PCA1_ADDR, 4, 1, 1 << 5, 1, 1 << 7),
+    (PCA2_ADDR, 2, 2, 1 << 10, 2, 1 << 9),
+    (PCA1_ADDR, 15, 1, 1 << 5, 1, 1 << 7),
+    (PCA2_ADDR, 4, 1, 1 << 9, 1, 1 << 7),
+    (PCA2_ADDR, 1, 1, 1 << 15, 1, 1 << 1),
+    (PCA2_ADDR, 5, 1, 1 << 15, 1, 1 << 1),
 ]
+
 
 # ================= STATE =================
 
-last_simple = [1]*len(simple_buttons)
+last_simple = [1] * len(simple_buttons)
 
-press_time = [0]*len(debounce_buttons)
-long_done = [False]*len(debounce_buttons)
+press_time = [0] * len(debounce_buttons)
+long_done = [False] * len(debounce_buttons)
+
 
 # ================= MAIN LOOP =================
 
@@ -145,21 +157,21 @@ try:
             PCA2_ADDR: pca_read(PCA2_ADDR)
         }
 
-        # SIMPLE BUTTONS
+        # SIMPLE TOGGLE
 
-        for i,(addr,pin,pcf,mask) in enumerate(simple_buttons):
+        for i, (addr, pin, pcf, mask) in enumerate(simple_buttons):
 
             val = pca[addr][pin]
 
             if last_simple[i] == 0 and val == 1:
-                toggle(pcf,mask)
+                toggle(pcf, mask)
 
             last_simple[i] = val
 
 
-        # SHORT / LONG BUTTONS
+        # SHORT + LONG PRESS
 
-        for i,(addr,pin,spcf,smask,lpcf,lmask) in enumerate(debounce_buttons):
+        for i, (addr, pin, spcf, smask, lpcf, lmask) in enumerate(debounce_buttons):
 
             val = pca[addr][pin]
 
@@ -170,14 +182,13 @@ try:
                     long_done[i] = False
 
                 elif not long_done[i] and now - press_time[i] >= LONG_PRESS:
-
-                    toggle(lpcf,lmask)
+                    toggle(lpcf, lmask)
                     long_done[i] = True
 
             else:
 
                 if press_time[i] != 0 and not long_done[i]:
-                    toggle(spcf,smask)
+                    toggle(spcf, smask)
 
                 press_time[i] = 0
                 long_done[i] = False
@@ -192,7 +203,7 @@ except KeyboardInterrupt:
 
     print("Stopping, turning relays OFF")
 
-    pcf_write(PCF1_ADDR,0xFFFF)
-    pcf_write(PCF2_ADDR,0xFFFF)
+    pcf_write(PCF1_ADDR, 0xFFFF)
+    pcf_write(PCF2_ADDR, 0xFFFF)
 
     bus.close()
