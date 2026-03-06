@@ -44,11 +44,6 @@ def pcf_write(addr, value):
     bus.write_i2c_block_data(addr, low, [high])
 
 
-def pcf_read(addr):
-    data = bus.read_i2c_block_data(addr, 0, 2)
-    return data[0] | (data[1] << 8)
-
-
 def pca_read(addr):
     p0 = bus.read_byte_data(addr, REG_INPUT0)
     p1 = bus.read_byte_data(addr, REG_INPUT1)
@@ -61,55 +56,23 @@ def toggle(pcf_id, mask):
     global pcf1_state, pcf2_state
 
     if pcf_id == 1:
+        before = pcf1_state
         pcf1_state ^= mask
+
+        if before != pcf1_state:
+            pcf_write(PCF1_ADDR, pcf1_state)
+            logging.info(f"[RELAY CHANGE] PCF1 | MASK {mask:#06x}")
+
     else:
+        before = pcf2_state
         pcf2_state ^= mask
 
-
-def write_outputs():
-    global pcf1_state, pcf2_state
-
-    # Read current hardware state
-    current1 = pcf_read(PCF1_ADDR)
-    current2 = pcf_read(PCF2_ADDR)
-
-    # ---------------- PCF1 ----------------
-    if current1 != pcf1_state:
-
-        # WRITE
-        pcf_write(PCF1_ADDR, pcf1_state)
-        logging.info(f"[OUTPUT WRITE] PCF1 -> {pcf1_state:016b}")
-
-        # VERIFY (Recheck)
-        verify1 = pcf_read(PCF1_ADDR)
-
-        if verify1 != pcf1_state:
-            logging.warning(
-                f"[OUTPUT VERIFY FAIL] PCF1 | W:{pcf1_state:016b} R:{verify1:016b}"
-            )
-        else:
-            logging.info(f"[OUTPUT VERIFY OK] PCF1")
-
-    # ---------------- PCF2 ----------------
-    if current2 != pcf2_state:
-
-        # WRITE
-        pcf_write(PCF2_ADDR, pcf2_state)
-        logging.info(f"[OUTPUT WRITE] PCF2 -> {pcf2_state:016b}")
-
-        # VERIFY (Recheck)
-        verify2 = pcf_read(PCF2_ADDR)
-
-        if verify2 != pcf2_state:
-            logging.warning(
-                f"[OUTPUT VERIFY FAIL] PCF2 | W:{pcf2_state:016b} R:{verify2:016b}"
-            )
-        else:
-            logging.info(f"[OUTPUT VERIFY OK] PCF2")
+        if before != pcf2_state:
+            pcf_write(PCF2_ADDR, pcf2_state)
+            logging.info(f"[RELAY CHANGE] PCF2 | MASK {mask:#06x}")
 
 
 # ================= INPUT MAPPING =================
-# YOUR FULL ORIGINAL MAPPING (UNCHANGED)
 
 simple_buttons = [
     (PCA1_ADDR, 0, 1, 1 << 4),
@@ -141,16 +104,12 @@ debounce_buttons = [
     (PCA2_ADDR, 5, 1, 1 << 15, 1, 1 << 1),
 ]
 
+
 # ================= STATE =================
 
 last_simple = [1] * len(simple_buttons)
 press_time = [0] * len(debounce_buttons)
 long_done = [False] * len(debounce_buttons)
-
-last_inputs = {
-    PCA1_ADDR: 0xFFFF,
-    PCA2_ADDR: 0xFFFF
-}
 
 # ================= MAIN LOOP =================
 
@@ -163,14 +122,6 @@ try:
             PCA1_ADDR: pca_read(PCA1_ADDR),
             PCA2_ADDR: pca_read(PCA2_ADDR)
         }
-
-        # -------- INPUT PACKAGE LOG --------
-        for addr in [PCA1_ADDR, PCA2_ADDR]:
-            if pca[addr] != last_inputs[addr]:
-                logging.info(
-                    f"INPUT @ {hex(addr)} | PACKAGE: {pca[addr]:016b}"
-                )
-                last_inputs[addr] = pca[addr]
 
         # -------- SIMPLE TOGGLE --------
         for i, (addr, pin, pcf, mask) in enumerate(simple_buttons):
@@ -204,9 +155,6 @@ try:
 
                 press_time[i] = 0
                 long_done[i] = False
-
-        # -------- OUTPUT WRITE + VERIFY --------
-        write_outputs()
 
         time.sleep(LOOP_DELAY)
 
