@@ -101,38 +101,55 @@ pcf_write(PCF2_ADDR, pcf2_state)
 time.sleep(0.1)
 
 
-# ================= INPUT MAPPING =================
-# (YOUR EXACT MAPPING)
+# -------- Structure 1: Simple Toggle --------
+# Format:
+# (PCA_addr, input_pin, pcf_device, output_bit_mask)
+#
+# PCA_addr        -> which PCA9555 input expander the button is on
+# input_pin       -> pin number on that PCA (0-15)
+# pcf_device      -> which PCF8575 output chip controls the relay
+# output_bit_mask -> which relay bit to toggle (1 << bit)
 
 simple_buttons = [
-    (PCA1_ADDR, 0, 1, 1 << 4),
-    (PCA1_ADDR, 8, 1, 1 << 0),
-    (PCA1_ADDR, 3, 1, 1 << 6),
-    (PCA1_ADDR, 11, 1, 1 << 7),
-    (PCA1_ADDR, 2, 2, 1 << 7),
-    (PCA1_ADDR, 5, 1, 1 << 2),
-    (PCA1_ADDR, 14, 1, 1 << 9),
-    (PCA1_ADDR, 6, 1, 1 << 3),
-    (PCA2_ADDR, 7, 1, 1 << 8),
-    (PCA1_ADDR, 7, 1, 1 << 10),
-    (PCA1_ADDR, 1, 1, 1 << 11),
-    (PCA1_ADDR, 12, 1, 1 << 12),
-    (PCA1_ADDR, 9, 1, 1 << 13),
-    (PCA2_ADDR, 14, 1, 1 << 14),
-    (PCA2_ADDR, 0, 2, 1 << 8),
+    (PCA1_ADDR, 0, pcf1, 1 << 4),  # janis griesti galvenais
+    (PCA1_ADDR, 8, pcf1, 1 << 0),  # ieva griesti galvenais
+    (PCA1_ADDR, 3, pcf1, 1 << 6),  # virtuve
+    (PCA1_ADDR, 11, pcf1, 1 << 7), # koridors vidus sledzis
+    (PCA1_ADDR, 2, pcf2, 1 << 7),  # tehniska
+    (PCA1_ADDR, 5, pcf1, 1 << 2),  # gulamistaba galvenais
+    (PCA1_ADDR, 14, pcf1, 1 << 9), # vejtveris durvis
+    (PCA1_ADDR, 6, pcf1, 1 << 3),  # maza vanna
+    (PCA2_ADDR, 7, pcf1, 1 << 8),  # janis bra durvis
+    (PCA1_ADDR, 7, pcf1, 1 << 10), # skapis
+    (PCA1_ADDR, 1, pcf1, 1 << 11), # liela vanna
+    (PCA1_ADDR, 12, pcf1, 1 << 12),# ieva bra durvis
+    (PCA1_ADDR, 9, pcf1, 1 << 13), # maza vanna bra
+    (PCA2_ADDR, 14, pcf1, 1 << 14),# gulamistaba bra durvis
+    (PCA2_ADDR, 0, pcf2, 1 << 8),  # pagrabs
 ]
 
 
+# -------- Structure 2: Short + Long Press --------
+# Format:
+# (PCA_addr, pin, short_pcf, short_mask, long_pcf, long_mask)
+#
+# PCA_addr   -> which PCA input chip
+# pin        -> input pin
+# short_pcf  -> PCF device used for short press
+# short_mask -> relay bit toggled on short press
+# long_pcf   -> PCF device used for long press
+# long_mask  -> relay bit toggled on long press
+
 debounce_buttons = [
-    (PCA2_ADDR, 6, 1, 1 << 8, 1, 1 << 4),
-    (PCA1_ADDR, 13, 1, 1 << 12, 1, 1 << 0),
-    (PCA2_ADDR, 15, 1, 1 << 14, 1, 1 << 2),
-    (PCA1_ADDR, 4, 1, 1 << 5, 1, 1 << 7),
-    (PCA2_ADDR, 2, 2, 1 << 10, 2, 1 << 9),
-    (PCA1_ADDR, 15, 1, 1 << 5, 1, 1 << 7),
-    (PCA2_ADDR, 4, 1, 1 << 9, 1, 1 << 7),
-    (PCA2_ADDR, 1, 1, 1 << 15, 1, 1 << 1),
-    (PCA2_ADDR, 5, 1, 1 << 15, 1, 1 << 1),
+    (PCA2_ADDR, 6, pcf1, 1 << 8,  pcf1, 1 << 4),  # janis bra siena
+    (PCA1_ADDR, 13, pcf1, 1 << 12, pcf1, 1 << 0), # ieva bra siena
+    (PCA2_ADDR, 15, pcf1, 1 << 14, pcf1, 1 << 2), # gulamiistaba bra gulta
+    (PCA1_ADDR, 4, pcf1, 1 << 5,  pcf1, 1 << 7),  # viesistaba ar koridoru long
+    (PCA2_ADDR, 2, pcf2, 1 << 10, pcf2, 1 << 9),  # terase labais ara
+    (PCA1_ADDR, 15, pcf1, 1 << 5, pcf1, 1 << 7),  # terase kreisais
+    (PCA2_ADDR, 4, pcf1, 1 << 9,  pcf1, 1 << 7),  # vejveriis koridors
+    (PCA2_ADDR, 1, pcf1, 1 << 15, pcf1, 1 << 1),  # darbistaba durvis
+    (PCA2_ADDR, 5, pcf1, 1 << 15, pcf1, 1 << 1),  # drabistaba siena
 ]
 
 
