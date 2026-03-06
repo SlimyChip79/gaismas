@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import time
-import logging
 from smbus2 import SMBus
 
 # ================= CONFIG =================
@@ -18,13 +17,6 @@ REG_INPUT1 = 0x01
 
 LOOP_DELAY = 0.01
 LONG_PRESS = 0.35
-
-# ================= LOGGING =================
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(message)s"
-)
 
 # ================= INIT =================
 
@@ -61,7 +53,7 @@ def toggle(pcf_id, mask):
 
         if before != pcf1_state:
             pcf_write(PCF1_ADDR, pcf1_state)
-            logging.info(f"[RELAY CHANGE] PCF1 | MASK {mask:#06x}")
+            print("RELAY PCF1 ->", format(pcf1_state, "016b"))
 
     else:
         before = pcf2_state
@@ -69,7 +61,7 @@ def toggle(pcf_id, mask):
 
         if before != pcf2_state:
             pcf_write(PCF2_ADDR, pcf2_state)
-            logging.info(f"[RELAY CHANGE] PCF2 | MASK {mask:#06x}")
+            print("RELAY PCF2 ->", format(pcf2_state, "016b"))
 
 
 # ================= INPUT MAPPING =================
@@ -103,7 +95,6 @@ debounce_buttons = [
     (PCA2_ADDR, 1, 1, 1 << 15, 1, 1 << 1),
     (PCA2_ADDR, 5, 1, 1 << 15, 1, 1 << 1),
 ]
-
 
 # ================= STATE =================
 
