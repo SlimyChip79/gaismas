@@ -1,203 +1,182 @@
 #!/usr/bin/env python3
 import time
 from smbus2 import SMBus
-import RPi.GPIO as GPIO
+import board
+import busio
+from adafruit_pcf8575 import PCF8575
 
 # ================= CONFIG =================
 I2C_BUS = 1
 
-# PCA (buttons)
 PCA1_ADDR = 0x20
 PCA2_ADDR = 0x22
 
-# PCF (relays)
-PCF1_ADDR = 0x26
-PCF2_ADDR = 0x27
+PCF1_ADDR = 0x27
+PCF2_ADDR = 0x26
 
-# PCA registers
-REG_INPUT_0 = 0x00
+REG_INPUT_0  = 0x00
+REG_INPUT_1  = 0x01
 
-# Interrupt pins
-INT1_PIN = 17
-INT2_PIN = 27
+# ---------------- TIMING ----------------
+LOOP_DELAY = 0.05
+debounce_delay = 100
+long_press_threshold = 350
 
-# Timing
-LOOP_DELAY = 0.001
-DEBOUNCE_MS = 100
-LONG_PRESS_MS = 350
-
-# ==========================================
-
-print("[SYSTEM] Starting...")
+# ================= INIT =================
+print("[GAISMAS] Initializing...")
 
 bus = SMBus(I2C_BUS)
+i2c = busio.I2C(board.SCL, board.SDA)
+time.sleep(1)
 
-# ---------------- GPIO (INT) ----------------
-GPIO.setwarnings(False)
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(INT1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(INT2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+pcf1 = PCF8575(i2c, address=PCF1_ADDR)
+pcf2 = PCF8575(i2c, address=PCF2_ADDR)
 
-# ---------------- RELAY STATES --------------
+# All relays OFF (active LOW)
 pcf1_state = 0xFFFF
 pcf2_state = 0xFFFF
 
-bus.write_word_data(PCF1_ADDR, 0x00, pcf1_state)
-bus.write_word_data(PCF2_ADDR, 0x00, pcf2_state)
+pcf1.write_gpio(pcf1_state)
+pcf2.write_gpio(pcf2_state)
 
-# ================= BUTTON MAPS =================
+# ================= BUTTON STRUCTURES =================
 
-# (structure kept same behavior as your sketch)
-
-# --- SIMPLE TOGGLE (on release) ---
 simple_buttons = [
-    (PCA1_ADDR, 0,  PCF1_ADDR, 1<<4),
-    (PCA1_ADDR, 8,  PCF1_ADDR, 1<<0),
-    (PCA1_ADDR, 3,  PCF1_ADDR, 1<<6),
-    (PCA1_ADDR, 11, PCF1_ADDR, 1<<7),
-    (PCA2_ADDR, 7,  PCF1_ADDR, 1<<8),
+    (PCA1_ADDR, 0, pcf1, 1 << 4),
+    (PCA1_ADDR, 8, pcf1, 1 << 0),
+    (PCA1_ADDR, 3, pcf1, 1 << 6),
+    (PCA1_ADDR, 11, pcf1, 1 << 7),
+    (PCA1_ADDR, 2, pcf2, 1 << 7),
+    (PCA1_ADDR, 5, pcf1, 1 << 2),
+    (PCA1_ADDR, 14, pcf1, 1 << 9),
+    (PCA1_ADDR, 6, pcf1, 1 << 3),
+    (PCA2_ADDR, 7, pcf1, 1 << 8),
+    (PCA1_ADDR, 7, pcf1, 1 << 10),
+    (PCA1_ADDR, 1, pcf1, 1 << 11),
+    (PCA1_ADDR, 12, pcf1, 1 << 12),
+    (PCA1_ADDR, 9, pcf1, 1 << 13),
+    (PCA2_ADDR, 14, pcf1, 1 << 14),
+    (PCA2_ADDR, 0, pcf2, 1 << 8),
 ]
 
-# --- SHORT + LONG PRESS ---
 debounce_buttons = [
-    (PCA2_ADDR, 6,  PCF1_ADDR, 1<<4,  PCF1_ADDR, 1<<0),
-    (PCA1_ADDR, 13, PCF1_ADDR, 1<<12, PCF1_ADDR, 1<<1),
+    (PCA2_ADDR, 6, pcf1, 1 << 8,  pcf1, 1 << 4),
+    (PCA1_ADDR, 13, pcf1, 1 << 12,  pcf1, 1 << 0),
+    (PCA2_ADDR, 15, pcf1, 1 << 14,  pcf1, 1 << 2),
+    (PCA1_ADDR, 4, pcf1, 1 << 5,  pcf1, 1 << 7),
+    (PCA2_ADDR, 2, pcf2, 1 << 10,  pcf2, 1 << 9),
+    (PCA1_ADDR, 15, pcf1, 1 << 5,  pcf1, 1 << 7),
+    (PCA2_ADDR, 4, pcf1, 1 << 9,  pcf1, 1 << 7),
+    (PCA2_ADDR, 1, pcf1, 1 << 15,  pcf1, 1 << 1),
+    (PCA2_ADDR, 5, pcf1, 1 << 15,  pcf1, 1 << 1),
 ]
 
-# ================= STATE TRACKING =================
+# ================= STATE TRACKERS =================
 
-last_simple = [1]*len(simple_buttons)
+last_simple_state = [1] * len(simple_buttons)
 
-last_state = {}
-press_time = {}
-long_done = {}
+last_debounce_state = [1] * len(debounce_buttons)
+last_debounce_time = [0] * len(debounce_buttons)
+press_start_time = [0] * len(debounce_buttons)
+long_press_triggered = [False] * len(debounce_buttons)
 
 # ================= HELPERS =================
 
-def read_pca(addr):
-    return bus.read_word_data(addr, REG_INPUT_0)
-
-def get_bit(value, bit):
-    return (value >> bit) & 1
+def read_pca_inputs(addr):
+    try:
+        p0 = bus.read_byte_data(addr, REG_INPUT_0)
+        p1 = bus.read_byte_data(addr, REG_INPUT_1)
+        return [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
+    except:
+        return [1]*16
 
 # ================= MAIN LOOP =================
-
-print("[SYSTEM] Ready.")
 
 try:
     while True:
 
-        # --------- PCA1 ----------
-        if GPIO.input(INT1_PIN) == 0:
-            inputs1 = read_pca(PCA1_ADDR)
+        current_time = int(time.time() * 1000)
 
-        else:
-            inputs1 = None
-
-        # --------- PCA2 ----------
-        if GPIO.input(INT2_PIN) == 0:
-            inputs2 = read_pca(PCA2_ADDR)
-        else:
-            inputs2 = None
+        pca_inputs = {
+            PCA1_ADDR: read_pca_inputs(PCA1_ADDR),
+            PCA2_ADDR: read_pca_inputs(PCA2_ADDR),
+        }
 
         # =====================================================
-        # STRUCTURE 1 — TOGGLE ON RELEASE
+        # STRUCTURE 1 — SIMPLE TOGGLE (ON RELEASE)
         # =====================================================
-        for idx, (addr, pin, pcf_addr, mask) in enumerate(simple_buttons):
+        for idx, (addr, pin, pcf, relay_mask) in enumerate(simple_buttons):
 
-            if addr == PCA1_ADDR and inputs1 is not None:
-                val = get_bit(inputs1, pin)
-            elif addr == PCA2_ADDR and inputs2 is not None:
-                val = get_bit(inputs2, pin)
-            else:
-                continue
+            val = pca_inputs[addr][pin]  # 0 = pressed
 
-            # release detection
-            if last_simple[idx] == 0 and val == 1:
+            # Toggle on release (pressed -> released)
+            if last_simple_state[idx] == 0 and val == 1:
 
-                current = pcf1_state if pcf_addr == PCF1_ADDR else pcf2_state
-
-                current ^= mask
-
-                if pcf_addr == PCF1_ADDR:
-                    pcf1_state = current
+                if pcf is pcf1:
+                    pcf1_state ^= relay_mask
+                    pcf1.write_gpio(pcf1_state)
                 else:
-                    pcf2_state = current
+                    pcf2_state ^= relay_mask
+                    pcf2.write_gpio(pcf2_state)
 
-                bus.write_word_data(pcf_addr, 0x00, current)
-                print(f"[SIMPLE] Toggle relay")
+                print(f"[SIMPLE] Button {idx} toggled relay")
 
-            last_simple[idx] = val
+            last_simple_state[idx] = val
 
         # =====================================================
         # STRUCTURE 2 — SHORT + LONG PRESS
         # =====================================================
-        now = int(time.time()*1000)
+        for idx, (addr, pin, short_pcf, short_mask, long_pcf, long_mask) in enumerate(debounce_buttons):
 
-        for idx, (addr, pin, short_addr, short_mask, long_addr, long_mask) in enumerate(debounce_buttons):
+            val = pca_inputs[addr][pin]
 
-            if addr == PCA1_ADDR and inputs1 is not None:
-                val = get_bit(inputs1, pin)
-            elif addr == PCA2_ADDR and inputs2 is not None:
-                val = get_bit(inputs2, pin)
-            else:
-                continue
+            if val != last_debounce_state[idx]:
+                last_debounce_time[idx] = current_time
 
-            key = (addr, pin)
+            if (current_time - last_debounce_time[idx]) > debounce_delay:
 
-            if key not in last_state:
-                last_state[key] = 1
-                press_time[key] = 0
-                long_done[key] = False
+                if val == 0:
 
-            if val == 0:  # pressed
+                    if press_start_time[idx] == 0:
+                        press_start_time[idx] = current_time
+                        long_press_triggered[idx] = False
 
-                if press_time[key] == 0:
-                    press_time[key] = now
-                    long_done[key] = False
+                    elif (
+                        not long_press_triggered[idx]
+                        and (current_time - press_start_time[idx] >= long_press_threshold)
+                    ):
 
-                elif (not long_done[key] and
-                      now - press_time[key] >= LONG_PRESS_MS):
+                        if long_pcf is pcf1:
+                            pcf1_state ^= long_mask
+                            pcf1.write_gpio(pcf1_state)
+                        else:
+                            pcf2_state ^= long_mask
+                            pcf2.write_gpio(pcf2_state)
 
-                    current = pcf1_state if long_addr == PCF1_ADDR else pcf2_state
-                    current ^= long_mask
+                        print(f"[DEBOUNCE] Button {idx} LONG PRESS")
+                        long_press_triggered[idx] = True
 
-                    if long_addr == PCF1_ADDR:
-                        pcf1_state = current
-                    else:
-                        pcf2_state = current
+                else:
+                    if press_start_time[idx] != 0 and not long_press_triggered[idx]:
 
-                    bus.write_word_data(long_addr, 0x00, current)
-                    print("[LONG PRESS]")
-                    long_done[key] = True
+                        if short_pcf is pcf1:
+                            pcf1_state ^= short_mask
+                            pcf1.write_gpio(pcf1_state)
+                        else:
+                            pcf2_state ^= short_mask
+                            pcf2.write_gpio(pcf2_state)
 
-            else:  # released
+                        print(f"[DEBOUNCE] Button {idx} SHORT PRESS")
 
-                if press_time[key] != 0 and not long_done[key]:
+                    press_start_time[idx] = 0
+                    long_press_triggered[idx] = False
 
-                    current = pcf1_state if short_addr == PCF1_ADDR else pcf2_state
-                    current ^= short_mask
-
-                    if short_addr == PCF1_ADDR:
-                        pcf1_state = current
-                    else:
-                        pcf2_state = current
-
-                    bus.write_word_data(short_addr, 0x00, current)
-                    print("[SHORT PRESS]")
-
-                press_time[key] = 0
-                long_done[key] = False
-
-            last_state[key] = val
+            last_debounce_state[idx] = val
 
         time.sleep(LOOP_DELAY)
 
 except KeyboardInterrupt:
-    print("\nShutting down...")
-
-    bus.write_word_data(PCF1_ADDR, 0x00, 0xFFFF)
-    bus.write_word_data(PCF2_ADDR, 0x00, 0xFFFF)
-
-    GPIO.cleanup()
+    print("Stopping, turning all relays OFF")
+    pcf1.write_gpio(0xFFFF)
+    pcf2.write_gpio(0xFFFF)
     bus.close()
