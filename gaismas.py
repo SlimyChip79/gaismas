@@ -25,8 +25,8 @@ PCA2_ADDR = 0x22
 PCF1_ADDR = 0x27   # pcf1
 PCF2_ADDR = 0x26   # pcf2
 
-INT1_PIN  = 17     # active-LOW interrupt from PCA1
-INT2_PIN  = 27     # active-LOW interrupt from PCA2
+INT1_PIN  = 27     # active-LOW interrupt from PCA1
+INT2_PIN  = 17     # active-LOW interrupt from PCA2
 
 REG_INPUT_0 = 0x00
 REG_INPUT_1 = 0x01
