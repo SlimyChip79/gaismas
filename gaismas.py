@@ -52,7 +52,12 @@ def pcf_write(addr, state):
     """Write 16-bit state to a PCF8575 (no register — raw 2-byte write)."""
     low  = state & 0xFF
     high = (state >> 8) & 0xFF
-    bus.write_i2c_block_data(addr, low, [high])
+    try:
+        bus.write_i2c_block_data(addr, low, [high])
+        print(f"[I2C WRITE] PCF 0x{addr:02X} → state=0x{state:04X}  "
+              f"(low=0b{low:08b}  high=0b{high:08b})")
+    except OSError as e:
+        print(f"[I2C ERROR] PCF 0x{addr:02X} write failed: {e}")
 
 pcf_write(PCF1_ADDR, pcf1_state)
 pcf_write(PCF2_ADDR, pcf2_state)
@@ -120,8 +125,14 @@ def read_pca(addr):
     try:
         p0 = bus.read_byte_data(addr, REG_INPUT_0)
         p1 = bus.read_byte_data(addr, REG_INPUT_1)
-        return [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
-    except OSError:
+        pins = [(p0 >> i) & 1 for i in range(8)] + [(p1 >> i) & 1 for i in range(8)]
+        pressed = [i for i, v in enumerate(pins) if v == 0]
+        label = f"PCA 0x{addr:02X}"
+        print(f"[I2C READ ] {label} → P0=0b{p0:08b} ({p0:#04x})  P1=0b{p1:08b} ({p1:#04x})"
+              f"  pressed pins: {pressed if pressed else 'none'}")
+        return pins
+    except OSError as e:
+        print(f"[I2C ERROR] PCA 0x{addr:02X} read failed: {e}")
         return [1] * 16   # fail-safe: treat all as released
 
 def toggle_relay(pcf_addr, mask):
@@ -136,15 +147,43 @@ def toggle_relay(pcf_addr, mask):
 
 # ===================== MAIN LOOP ==================
 
+# Track INT pin state to log only on edge (change), not every loop
+_last_int1 = 1
+_last_int2 = 1
+_last_heartbeat = 0
+
 try:
     while True:
         now_ms = int(time.time() * 1000)
 
+        # --- Sample INT pins ---
+        int1 = GPIO.input(INT1_PIN)
+        int2 = GPIO.input(INT2_PIN)
+
+        # Log INT edges (HIGH→LOW = interrupt fired, LOW→HIGH = cleared)
+        if int1 != _last_int1:
+            state_str = "FIRED (LOW)" if int1 == 0 else "cleared (HIGH)"
+            print(f"[INT EDGE ] GPIO{INT1_PIN} (PCA1 0x{PCA1_ADDR:02X}) → {state_str}")
+            _last_int1 = int1
+        if int2 != _last_int2:
+            state_str = "FIRED (LOW)" if int2 == 0 else "cleared (HIGH)"
+            print(f"[INT EDGE ] GPIO{INT2_PIN} (PCA2 0x{PCA2_ADDR:02X}) → {state_str}")
+            _last_int2 = int2
+
+        # Periodic heartbeat every 10 seconds so you can see the loop is alive
+        if now_ms - _last_heartbeat >= 10000:
+            print(f"[HEARTBEAT] INT1(GPIO{INT1_PIN})={'LOW' if int1==0 else 'HIGH'}  "
+                  f"INT2(GPIO{INT2_PIN})={'LOW' if int2==0 else 'HIGH'}  "
+                  f"pcf1=0x{pcf1_state:04X}  pcf2=0x{pcf2_state:04X}")
+            _last_heartbeat = now_ms
+
         # --- Read inputs only when the relevant INT line fires ---
         pca_data = {}
-        if GPIO.input(INT1_PIN) == 0:
+        if int1 == 0:
+            print(f"[INT ACTIVE] PCA1 0x{PCA1_ADDR:02X} — reading inputs...")
             pca_data[PCA1_ADDR] = read_pca(PCA1_ADDR)
-        if GPIO.input(INT2_PIN) == 0:
+        if int2 == 0:
+            print(f"[INT ACTIVE] PCA2 0x{PCA2_ADDR:02X} — reading inputs...")
             pca_data[PCA2_ADDR] = read_pca(PCA2_ADDR)
 
         # Skip processing if no interrupt is active
